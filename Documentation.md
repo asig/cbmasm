@@ -1,13 +1,25 @@
-labels need to start at the beginning of a line
+Labels
+======
+Labels need to terminate with ":" unless they start at the beginning of the line.
 
-line := [ident] [op] [";" comment]
+Local labels
+------------
+A local label is a label that starts with an underscore (`_`).
+All local labels are only visible (and need to be resolved) before the next non-local label. 
+
+Syntax
+======
+
+line := [ident[":"]] [op] [";" comment]
 
 
 op := ".macro" [ident {"," ident }]
     | ".mend"
     | ".equ" expr
     | ".org" expr
-    | ".db" dbOp {"," dbOp }
+    | ".byte" dbOp {"," dbOp }
+    | ".word" dbOp {"," dbOp }
+    | ".reserve" expr ["," dbOp ] 
     | ident [ param {"," param } ].
 
 dbOp := ["<"|">"] expr | string .
@@ -24,9 +36,14 @@ param := "#" ["<"|">"] expr
        | "(" expr ") ""," "X" 
        | "(" expr ")" "," "Y"       
 
-expr := ["-"] factor { "*"|"/"|"%"|"&"|"^" factor } .
-factor  := term { "+"|"-"|"|" term } .
-term    := "~" term | number | ident | '$'.
+
+expr := ["-"] term { "+"|"-"|"|" term } .
+term := factor { "*"|"/"|"%"|"&"|"^" factor } . 
+factor := "~" factor 
+        | number 
+        | ident 
+        | '*'
+        | "(" expr ")" .
 number  := digit { digit } 
          | "%" binDigit { binDigit }
          | "&" octDigit { octDigit }
@@ -34,6 +51,8 @@ number  := digit { digit }
 ident := identChar { identChar | digit }.
 identChar := "@" | "." | "_" | alpha .  
  
+
+
 
 
 

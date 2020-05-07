@@ -11,40 +11,50 @@ import (
 	"strings"
 )
 
-var stderr = log.New(os.Stderr, "", 0)
+var (
+	errorOutput = log.New(os.Stderr, "", 0)
+	statusOutput = log.New(os.Stdout, "", 0)
+)
 
 var (
 	flagIncludeDirs = flag.String("I", ".", "include paths")
+	flagPlain = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 )
 
 func usage() {
-	stderr.Println("Usage: c128asm [inputfile] [outputfile]")
+	errorOutput.Println("Usage: c128asm [inputfile] [outputfile] [-plain]")
 	os.Exit(1)
 }
 
 func main() {
 	flag.Parse()
+	args := flag.Args()
 
 	inputFilename := "<stdin>"
+	outputFilename := "<stdout>"
 	var err error
 	inputFile := os.Stdin
 	outputFile := os.Stdout
-	if len(os.Args) > 1 {
-		inputFilename = os.Args[1]
+	if len(args) > 0 {
+		inputFilename = args[0]
 		inputFile, err = os.Open(inputFilename)
 		defer inputFile.Close()
 		if err != nil {
 			log.Fatalf("Can't open input file %q.", inputFilename)
 		}
 	}
-	if len(os.Args) > 2 {
-		outputFile, err = os.Create(os.Args[2])
+	if len(args) > 1 {
+		outputFilename = args[1]
+		outputFile, err = os.Create(outputFilename)
 		if err != nil {
-			log.Fatalf("Can't open output file %q.", os.Args[2])
+			log.Fatalf("Can't open output file %q.", outputFilename)
 		}
 		defer outputFile.Close()
+	} else {
+		// Oytput is written to stdout, don't use it for status updates
+		statusOutput = errorOutput
 	}
-	if len(os.Args) > 3 {
+	if len(args) > 2 {
 		usage()
 	}
 
@@ -59,9 +69,9 @@ func main() {
 	assembler.Assemble()
 	errors := assembler.Errors()
 	if len(errors) > 0 {
-		fmt.Printf("%d errors occurred:\n", len(errors))
+		errorOutput.Printf("%d errors occurred:\n", len(errors))
 		for _, e := range errors {
-			fmt.Printf("%s\n", e)
+			errorOutput.Printf("%s\n", e)
 		}
 	}
 	warnings := assembler.Warnings()
@@ -71,9 +81,16 @@ func main() {
 			fmt.Printf("%s\n", e)
 		}
 	}
-	if len(errors) == 0 {
+	if len(errors) != 0 {
+		return
+	}
+
+	if (!*flagPlain) {
 		o := assembler.Origin()
 		outputFile.Write([]byte{byte(o & 0xff), byte((o >> 8) & 0xff)})
-		outputFile.Write(assembler.GetBytes())
 	}
+	bytes := assembler.GetBytes()
+	outputFile.Write(bytes)
+
+	statusOutput.Printf("%d bytes written to %q.", len(bytes), outputFilename)
 }

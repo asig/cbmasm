@@ -32,14 +32,17 @@ func (n *SymbolRefNode) ResultSize() int {
 	return n.maxSize
 }
 
-func (n *SymbolRefNode) ForceSize(size int) {
+func (n *SymbolRefNode) ForceSize(size int) bool {
 	if !n.resolved {
 		n.maxSize = size
-	} else {
-		if n.val < 1<<(size*8) {
-			n.maxSize = size
-		}
+		return true
 	}
+
+	if n.val < 1<<(size*8) {
+		n.maxSize = size
+		return true
+	}
+	return false
 }
 
 func (n *SymbolRefNode) Eval() int {
@@ -64,7 +67,7 @@ func (n *SymbolRefNode) UnresolvedSymbols() map[string]bool {
 	if n.resolved {
 		return nil
 	}
-	return map[string]bool{ n.symbol: true}
+	return map[string]bool{n.symbol: true}
 }
 
 func (n *SymbolRefNode) MarkRelative() {

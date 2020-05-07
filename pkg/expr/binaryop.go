@@ -40,9 +40,10 @@ func (n *BinaryOpNode) ResultSize() int {
 	return max(n.left.ResultSize(), n.right.ResultSize())
 }
 
-func (n *BinaryOpNode) ForceSize(size int) {
-	n.left.ForceSize(size)
-	n.right.ForceSize(size)
+func (n *BinaryOpNode) ForceSize(size int) bool {
+	b1 := n.left.ForceSize(size)
+	b2 := n.right.ForceSize(size)
+	return b1 && b2
 }
 
 func (n *BinaryOpNode) Eval() int {

@@ -2,7 +2,7 @@ package expr
 
 type Node interface {
 	ResultSize() int
-	ForceSize(size int)
+	ForceSize(size int) bool
 	Eval() int
 
 	Resolve(label string, val int)

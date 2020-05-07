@@ -33,8 +33,8 @@ func (n *UnaryOpNode) ResultSize() int {
 	panic(fmt.Sprintf("Unimplemented UnaryOp %d", n.op))
 }
 
-func (n *UnaryOpNode) ForceSize(size int) {
-	n.node.ForceSize(size)
+func (n *UnaryOpNode) ForceSize(size int) bool {
+	return n.node.ForceSize(size)
 }
 
 func (n *UnaryOpNode) Eval() int {

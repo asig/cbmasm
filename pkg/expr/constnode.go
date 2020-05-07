@@ -18,10 +18,12 @@ func (n *ConstNode) ResultSize() int {
 	return n.size
 }
 
-func (n *ConstNode) ForceSize(size int) {
+func (n *ConstNode) ForceSize(size int) bool {
 	if n.val < 1 << (size*8) {
 		n.size = size
+		return true
 	}
+	return false
 }
 
 func (n *ConstNode) Eval() int {

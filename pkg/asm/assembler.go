@@ -63,32 +63,12 @@ func (a *Assembler) Assemble() {
 	a.assembleText(a.text)
 
 	p := text.Pos{Filename: a.text.Filename, Line: a.text.LastLine().LineNumber, Col: 1}
-	seen := make(map[string]bool)
-	for symbol, node := range a.symbols {
-		if !node.IsResolved() {
-			syms := node.UnresolvedSymbols()
-			if len(syms) > 0 {
-				var symnames []string
-				for s := range syms {
-					symnames = append(symnames, s)
-				}
-				a.AddError(p, fmt.Sprintf("Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", ")))
-				seen[symbol] = true
-			} else {
-				a.AddError(p, fmt.Sprintf("Undefined label %q", symbol))
-			}
-		}
-	}
-	for label := range a.patchesPerLabel {
-		if !seen[label]{
-		a.AddError(p, fmt.Sprintf("Undefined label %q", label))
-	}
-	}
+	a.reportUnresolvedLabels(p, func(string) bool { return true })
 }
 
 func (a *Assembler) assembleText(t text.Text) {
 	for _, line := range t.Lines {
-		a.scanner = scanner.New(a.text.Filename, line, a)
+		a.scanner = scanner.New(t.Filename, line, a)
 		a.tokenBufSet = false
 		a.lookahead = a.scanner.Scan()
 
@@ -199,12 +179,42 @@ func (a *Assembler) assembleLine(line text.Line) {
 			a.AddError(p, fmt.Sprintf("Can't read file %q: %s", *f, err))
 		}
 		a.assembleText(text.Process(filename, string(content)))
-	case ".db":
-		// handle byte const
-		nodes := a.dbOp()
+	case ".byte":
+		// handle byte consts
+		nodes := a.dbOp(1)
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			n2 := a.dbOp()
+			n2 := a.dbOp(1)
+			nodes = append(nodes, n2...)
+		}
+		a.emit(nodes...)
+	case ".reserve":
+		// handle byte const
+		pos := a.lookahead.Pos
+		valNode := expr.NewConst(0, 1)
+		sizeNode := a.expr(2)
+		if !sizeNode.IsResolved() {
+			a.AddError(pos, "Expression is unresolved")
+			sizeNode = expr.NewConst(1, 2)
+		}
+		for a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			pos = a.lookahead.Pos
+			vals := a.dbOp(1)
+			if len(vals) > 1 {
+				a.AddError(pos, "Strings not allowed.")
+			}
+			valNode = vals[0]
+		}
+		for i := 0; i < sizeNode.Eval(); i++ {
+			a.emit(valNode)
+		}
+	case ".word":
+		// handle wird const
+		nodes := a.dbOp(2)
+		for a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			n2 := a.dbOp(2)
 			nodes = append(nodes, n2...)
 		}
 		a.emit(nodes...)
@@ -313,10 +323,10 @@ func (a *Assembler) param() param {
 		switch a.lookahead.Type {
 		case scanner.Lt:
 			a.nextToken()
-			node = expr.NewUnaryOp(a.expr(1), expr.LoByte)
+			node = expr.NewUnaryOp(a.expr(2), expr.LoByte)
 		case scanner.Gt:
 			a.nextToken()
-			node = expr.NewUnaryOp(a.expr(1), expr.HiByte)
+			node = expr.NewUnaryOp(a.expr(2), expr.HiByte)
 		default:
 			node = a.expr(1)
 		}
@@ -333,9 +343,9 @@ func (a *Assembler) param() param {
 			// AM_IndexedIndirect  // ($aa,X)
 			a.nextToken()
 			if node.ResultSize() > 1 {
-				// Let see if we still can enforce size
-				if !node.IsResolved() {
-					node.ForceSize(1)
+				// Let see if we can enforce size
+				if !node.ForceSize(1) {
+					a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
 				}
 			} else {
 				// We can't, so complain
@@ -343,8 +353,8 @@ func (a *Assembler) param() param {
 			}
 			reg := a.lookahead.StrVal
 			pos := a.lookahead.Pos
-			a.match(scanner.String)
-			if strings.ToLower(reg) != "X" {
+			a.match(scanner.Ident)
+			if strings.ToLower(reg) != "x" {
 				a.AddError(pos, fmt.Sprintf("Register X expected, found %s.", reg))
 			}
 			am = AM_IndexedIndirect
@@ -356,9 +366,9 @@ func (a *Assembler) param() param {
 				// AM_IndirectIndexed  // ($aa),Y
 				a.nextToken()
 				if node.ResultSize() > 1 {
-					// Let see if we still can enforce size
-					if !node.IsResolved() {
-						node.ForceSize(1)
+					// Let see if we can enforce size
+					if !node.ForceSize(1) {
+						a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
 					}
 				} else {
 					// We can't, so complain
@@ -366,8 +376,8 @@ func (a *Assembler) param() param {
 				}
 				reg := a.lookahead.StrVal
 				pos := a.lookahead.Pos
-				a.match(scanner.String)
-				if strings.ToLower(reg) != "Y" {
+				a.match(scanner.Ident)
+				if strings.ToLower(reg) != "y" {
 					a.AddError(pos, fmt.Sprintf("Register Y expected, found %s.", reg))
 				}
 				am = AM_IndirectIndexed
@@ -398,15 +408,15 @@ func (a *Assembler) param() param {
 	}
 }
 
-func (a *Assembler) dbOp() []expr.Node {
+func (a *Assembler) dbOp(size int) []expr.Node {
 	switch a.lookahead.Type {
 	case scanner.Lt:
 		a.nextToken()
-		n := a.expr(1)
+		n := a.expr(size)
 		return []expr.Node{expr.NewUnaryOp(n, expr.LoByte)}
 	case scanner.Gt:
 		a.nextToken()
-		n := a.expr(1)
+		n := a.expr(size)
 		return []expr.Node{expr.NewUnaryOp(n, expr.HiByte)}
 	case scanner.String:
 		str := a.lookahead.StrVal
@@ -417,41 +427,26 @@ func (a *Assembler) dbOp() []expr.Node {
 		}
 		return res
 	default:
-		return []expr.Node{a.expr(1)}
+		return []expr.Node{a.expr(size)}
 	}
 }
 
+func containsKey(m map[scanner.TokenType]expr.BinaryOp, key scanner.TokenType) bool {
+	_, found := m[key]
+	return found
+}
+
 func (a *Assembler) expr(size int) expr.Node {
-	// expr := ["-"] factor { "*"|"/"|"%"|"&"|"^" factor } .
+	// expr := ["-"] term { "+"|"-"|"|" term } .
 	neg := false
 	if a.lookahead.Type == scanner.Minus {
 		neg = true
 		a.nextToken()
 	}
-	node := a.factor(size)
+	node := a.term(size)
 	if neg {
 		node = expr.NewUnaryOp(node, expr.Neg)
 	}
-
-	ops := map[scanner.TokenType]expr.BinaryOp{
-		scanner.Asterisk:  expr.Mul,
-		scanner.Slash:     expr.Div,
-		scanner.Percent:   expr.Mod,
-		scanner.Ampersand: expr.And,
-		scanner.Caret:     expr.Xor,
-	}
-
-	for a.lookahead.Type == scanner.Asterisk || a.lookahead.Type == scanner.Slash || a.lookahead.Type == scanner.Percent {
-		op := ops[a.lookahead.Type]
-		a.nextToken()
-		n2 := a.factor(size)
-		node = expr.NewBinaryOp(node, n2, op)
-	}
-	return node
-}
-
-func (a *Assembler) factor(size int) expr.Node {
-	// factor  := term { "+"|"-"|"|"  term } .
 
 	ops := map[scanner.TokenType]expr.BinaryOp{
 		scanner.Plus:  expr.Add,
@@ -459,8 +454,7 @@ func (a *Assembler) factor(size int) expr.Node {
 		scanner.Bar:   expr.Or,
 	}
 
-	node := a.term(size)
-	for a.lookahead.Type == scanner.Asterisk || a.lookahead.Type == scanner.Slash || a.lookahead.Type == scanner.Percent {
+	for containsKey(ops, a.lookahead.Type) {
 		op := ops[a.lookahead.Type]
 		a.nextToken()
 		n2 := a.term(size)
@@ -470,12 +464,32 @@ func (a *Assembler) factor(size int) expr.Node {
 }
 
 func (a *Assembler) term(size int) expr.Node {
-	// term := "~" term | number | ident | '$'.
+	// term := factor { "*"|"/"|"%"|"&"|"^" factor } .
+	ops := map[scanner.TokenType]expr.BinaryOp{
+		scanner.Asterisk:  expr.Mul,
+		scanner.Slash:     expr.Div,
+		scanner.Percent:   expr.Mod,
+		scanner.Ampersand: expr.And,
+		scanner.Caret:     expr.Xor,
+	}
+
+	node := a.factor(size)
+	for containsKey(ops, a.lookahead.Type) {
+		op := ops[a.lookahead.Type]
+		a.nextToken()
+		n2 := a.factor(size)
+		node = expr.NewBinaryOp(node, n2, op)
+	}
+	return node
+}
+
+func (a *Assembler) factor(size int) expr.Node {
+	// factor := "~" factor | number | ident | '*'.
 	node := expr.NewConst(0, size)
 	switch a.lookahead.Type {
 	case scanner.Tilde:
 		a.nextToken()
-		node = a.term(size)
+		node = a.factor(size)
 		node = expr.NewUnaryOp(node, expr.Not)
 	case scanner.Number:
 		val := a.lookahead.IntVal
@@ -484,28 +498,31 @@ func (a *Assembler) term(size int) expr.Node {
 			break
 		}
 		node = expr.NewConst(int(val), size)
+		a.nextToken()
 	case scanner.Ident:
 		sym := a.lookahead.StrVal
 		node = nil
 		if val, found := a.symbols[sym]; found {
 			if val.IsResolved() {
-				if !checkSize(size, val.Eval()) {
-					a.AddError(a.lookahead.Pos, fmt.Sprintf("Value $%x is wider than allowed bit size %d", val, size*8))
-				}
 				node = expr.NewSymbolRef(sym, size, val.Eval())
 			}
 		}
 		if node == nil {
 			node = expr.NewUnresolvedSymbol(sym, size)
 		}
-	case scanner.Dollar:
+		a.nextToken()
+	case scanner.LParen:
+		a.nextToken()
+		node = a.expr(size)
+		a.match(scanner.RParen)
+	case scanner.Asterisk:
 		if size < 2 {
 			a.AddError(a.lookahead.Pos, fmt.Sprintf("Current PC is 16 bits wide, expected is a %d bit wide value", size*8))
 			break
 		}
 		node = expr.NewConst(a.section.PC(), size)
+		a.nextToken()
 	}
-	a.nextToken()
 	return node
 }
 
@@ -562,9 +579,64 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 
 	pc := a.section.PC()
 	a.addSymbol(label, expr.NewConst(pc, 2))
+
+	if !isLocalLabel(label) {
+		a.reportUnresolvedLabels(pos, isLocalLabel)
+		a.clearLocalLabels()
+	}
 }
 
-func (a *Assembler) addSymbol (symbol string, val expr.Node) {
+func (a *Assembler) clearLocalLabels() {
+	for symbol, _ := range a.symbols {
+		if isLocalLabel(symbol) {
+			delete(a.symbols, symbol)
+		}
+	}
+	for label := range a.patchesPerLabel {
+		if isLocalLabel(label) {
+			delete(a.patchesPerLabel, label)
+		}
+	}
+}
+
+func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(string) bool) {
+	p := text.Pos{Filename: a.text.Filename, Line: a.text.LastLine().LineNumber, Col: 1}
+	seen := make(map[string]bool)
+	for symbol, node := range a.symbols {
+		if !filterFunc(symbol) {
+			continue
+		}
+		if !node.IsResolved() {
+			syms := node.UnresolvedSymbols()
+			if len(syms) > 0 {
+				var symnames []string
+				for s := range syms {
+					symnames = append(symnames, s)
+				}
+				a.AddError(p, fmt.Sprintf("Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", ")))
+				seen[symbol] = true
+			} else {
+				a.AddError(p, fmt.Sprintf("Undefined label %q", symbol))
+				seen[symbol] = true
+			}
+		}
+	}
+	for label := range a.patchesPerLabel {
+		if !filterFunc(label) {
+			continue
+		}
+		if !seen[label] {
+			a.AddError(p, fmt.Sprintf("Undefined label %q", label))
+			seen[label] = true
+		}
+	}
+}
+
+func isLocalLabel(label string) bool {
+	return strings.HasPrefix(label, "_")
+}
+
+func (a *Assembler) addSymbol(symbol string, val expr.Node) {
 	a.symbols[symbol] = val
 	if !val.IsResolved() {
 		return
@@ -573,7 +645,6 @@ func (a *Assembler) addSymbol (symbol string, val expr.Node) {
 }
 
 func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
-
 	// Try to resolve as many patches as we can
 	patches := a.patchesPerLabel[symbol]
 	adjustedPatches := []patch{}
