@@ -15,6 +15,9 @@ func (e Error) String() string {
 }
 
 type Sink interface {
-	AddError(pos text.Pos, message string);
+	AddError(pos text.Pos, message string, args... interface{});
 }
 
+type Modifier interface {
+	Modify(err Error) Error
+}

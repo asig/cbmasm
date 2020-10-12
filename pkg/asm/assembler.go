@@ -20,13 +20,17 @@ type patch struct {
 }
 
 type param struct {
+	rawText string // Only used in macro calls
 	mode AddressingMode
 	val  expr.Node
 }
 
+
+
 type Assembler struct {
 	text         text.Text
 	includePaths []string
+	errorModifier errors.Modifier
 
 	errors      []errors.Error
 	warnings    []errors.Error
@@ -34,6 +38,11 @@ type Assembler struct {
 	lookahead   scanner.Token
 	tokenBuf    scanner.Token
 	tokenBufSet bool
+
+	lineProcessor func(*Assembler)
+
+	// current macro, only set when recording macros
+	macro *macro
 
 	// Code generation buffer
 	section *Section
@@ -43,6 +52,9 @@ type Assembler struct {
 
 	// Symbol table
 	symbols map[string]expr.Node
+
+	// Macros
+	macros map[string]*macro
 }
 
 func New(t text.Text, includePaths []string) *Assembler {
@@ -59,6 +71,7 @@ func (a *Assembler) Assemble() {
 	a.section = nil
 	a.patchesPerLabel = make(map[string][]patch)
 	a.symbols = make(map[string]expr.Node)
+	a.macros = make(map[string]*macro)
 
 	a.assembleText(a.text)
 
@@ -67,12 +80,13 @@ func (a *Assembler) Assemble() {
 }
 
 func (a *Assembler) assembleText(t text.Text) {
+	a.lineProcessor = (*Assembler).assembleLine
 	for _, line := range t.Lines {
 		a.scanner = scanner.New(t.Filename, line, a)
 		a.tokenBufSet = false
 		a.lookahead = a.scanner.Scan()
 
-		a.assembleLine(line)
+		a.lineProcessor(a)
 	}
 }
 
@@ -84,10 +98,9 @@ func (a *Assembler) GetBytes() []byte {
 	return a.section.bytes
 }
 
-func (a *Assembler) assembleLine(line text.Line) {
-	var labelPos text.Pos
+func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 	label := ""
-
+	var labelPos text.Pos
 	t := a.lookahead
 	if t.Type == scanner.Ident {
 		if t.Pos.Col == 1 {
@@ -113,6 +126,11 @@ func (a *Assembler) assembleLine(line text.Line) {
 			}
 		}
 	}
+	return t, labelPos, label
+}
+
+func (a *Assembler) assembleLine() {
+	t, labelPos, label := a.maybeLabel()
 
 	if t.Type == scanner.Semicolon || t.Type == scanner.Eol {
 		// Empty line. Add a label if necessary, and bail out.
@@ -123,7 +141,7 @@ func (a *Assembler) assembleLine(line text.Line) {
 	}
 
 	if t.Type != scanner.Ident {
-		a.AddError(t.Pos, fmt.Sprintf("expected %s, got %s", scanner.Ident, t.Type))
+		a.AddError(t.Pos, "expected %s, got %s", scanner.Ident, t.Type)
 		return
 	}
 	op := strings.ToLower(t.StrVal)
@@ -134,12 +152,12 @@ func (a *Assembler) assembleLine(line text.Line) {
 	case ".equ", ".macro":
 		// Label will be treated as name
 		if label == "" {
-			a.AddError(labelPos, fmt.Sprintf("Label is necessary"))
+			a.AddError(labelPos, "Label is necessary")
 		}
-	case ".org":
+	case ".org", ".mend":
 		// must not have a label
 		if label != "" {
-			a.AddError(labelPos, fmt.Sprintf("Labels not allowed for .org"))
+			a.AddError(labelPos, "Labels not allowed for .org")
 		}
 	default:
 		// In all other cases, add a label
@@ -155,12 +173,12 @@ func (a *Assembler) assembleLine(line text.Line) {
 		a.match(scanner.String)
 		f := a.findIncludeFile(filename)
 		if f == nil {
-			a.AddError(p, fmt.Sprintf("Can't find file %q in include paths.", filename))
+			a.AddError(p, "Can't find file %q in include paths.", filename)
 			break
 		}
 		data, err := ioutil.ReadFile(*f)
 		if err != nil {
-			a.AddError(p, fmt.Sprintf("Can't read file %q: %s", *f, err))
+			a.AddError(p, "Can't read file %q: %s", *f, err)
 		}
 		for _, b := range data {
 			a.emit(expr.NewConst(int(b), 1))
@@ -171,12 +189,12 @@ func (a *Assembler) assembleLine(line text.Line) {
 		a.match(scanner.String)
 		f := a.findIncludeFile(filename)
 		if f == nil {
-			a.AddError(p, fmt.Sprintf("Can't find file %q in include paths.", filename))
+			a.AddError(p, "Can't find file %q in include paths.", filename)
 			break
 		}
 		content, err := ioutil.ReadFile(*f)
 		if err != nil {
-			a.AddError(p, fmt.Sprintf("Can't read file %q: %s", *f, err))
+			a.AddError(p, "Can't read file %q: %s", *f, err)
 		}
 		a.assembleText(text.Process(filename, string(content)))
 	case ".byte":
@@ -225,13 +243,13 @@ func (a *Assembler) assembleLine(line text.Line) {
 		if orgNode.IsResolved() {
 			org = orgNode.Eval()
 		} else {
-			a.AddError(t.Pos, fmt.Sprintf("Can't use forward declarations in .org"))
+			a.AddError(t.Pos, "Can't use forward declarations in .org")
 			org = 0
 		}
 		if a.section != nil {
 			max := a.section.PC()
 			if org < max {
-				a.AddError(t.Pos, fmt.Sprintf("New origin %d is lower than current pc %d", org, max))
+				a.AddError(t.Pos, "New origin %d is lower than current pc %d", org, max)
 				org = max
 			}
 			toAdd := org - max
@@ -245,48 +263,138 @@ func (a *Assembler) assembleLine(line text.Line) {
 	case ".equ":
 		// label is equ name!
 		if _, found := a.symbols[label]; found {
-			a.AddError(t.Pos, fmt.Sprintf("Symbol %s already exists.", label))
+			a.AddError(t.Pos, "Symbol %s already exists.", label)
 			return
 		}
 		val := a.expr(2)
 		a.addSymbol(label, val)
 	case ".macro":
 		// label is macroname!
-		// begin macro
-	case ".mend":
-		// end maccro
-	default:
-		// must be a mnemonic
-		opCodes, found := Mnemonics[op]
-		if !found {
-			a.AddError(t.Pos, fmt.Sprintf("%s is not a valid mnemonic", t.StrVal))
-			return
+		macroName := label
+		a.macro = &macro{
+			filename: a.scanner.Filename(),
+			pos: t.Pos,
 		}
-		param := a.param()
-		opCode, found := opCodes[param.mode]
-		if !found && param.mode == AM_Absolute {
-			// Maybe it's a relative branch? let's check
-			opCode, found = opCodes[AM_Relative]
-			if found {
-				// Yes, it is! Switch to relative addressing
-				param.mode = AM_Relative
-				param.val.MarkRelative()
+		if _, found := Mnemonics[macroName]; found {
+			a.AddError(labelPos, "Can't use mnemonic %q as macro name", macroName)
+		}
+		if _, found := a.symbols[macroName]; found {
+			a.AddError(labelPos, "%q is already defined", macroName)
+		}
+		if _, found := a.macros[macroName]; found {
+			a.AddError(labelPos, "Macro %q already exists", macroName)
+		}
+		a.macros[macroName] = a.macro
+		if a.lookahead.Type != scanner.Eol {
+			a.macroParam()
+			for a.lookahead.Type == scanner.Comma {
+				a.nextToken()
+				a.macroParam()
 			}
 		}
-		if !found {
-			a.AddError(t.Pos, "Invalid parameter.")
+		a.lineProcessor = (*Assembler).recordMacro
+	default:
+		if m, found := a.macros[op]; found {
+			a.handleMacroInstantiation(m, t.Pos)
+		} else {
+			// must be a mnemonic
+			a.handleMnemonic(t)
 		}
 
-		// TODO(asigner): Add warning for JMP ($xxFF)
-		a.emit(expr.NewConst(int(opCode), 1))
-		if param.val != nil {
-			a.emit(param.val)
+		if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
+			a.AddError(a.lookahead.Pos, "';' or EOL expected")
 		}
 	}
+}
 
+func (a *Assembler) macroParam() {
+	paramName := a.lookahead.StrVal
+	paramPos := a.lookahead.Pos
+	a.match(scanner.Ident)
+	if err := a.macro.addParam(paramName); err != nil {
+		a.AddError(paramPos, "Parameter %s is already used", paramName)
+	}
+}
+
+type macroInvocation struct {
+	callPos text.Pos
+}
+
+func (i *macroInvocation) Modify(err errors.Error) errors.Error {
+	msg := err.Msg + fmt.Sprintf(" (called from %s, line %d)", i.callPos.Filename, i.callPos.Line)
+	return errors.Error{err.Pos, msg}
+}
+
+func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
+	// Read actual params
+	paramStart := a.lookahead.Pos
+	var actParams []param
 	if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
-		a.AddError(a.lookahead.Pos, "';' or EOL expected")
+		actParams = append(actParams, a.param())
+		for a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			actParams = append(actParams, a.param())
+		}
 	}
+
+	if len(actParams) != len(m.params) {
+		a.AddError(paramStart, "Wrong number of arguments: %d expected, %d found", len(m.params), len(actParams))
+	}
+
+	// Get copy of macro with parameters substituted
+	t := text.Text{m.filename, m.replaceParams(actParams)}
+
+	savedErrorModifier := a.errorModifier
+	a.errorModifier = &macroInvocation{callPos: callPos}
+	a.assembleText(t);
+	a.errorModifier = savedErrorModifier
+}
+
+func (a *Assembler) handleMnemonic(t scanner.Token) {
+	op := strings.ToLower(t.StrVal)
+
+	// must be a mnemonic
+	opCodes, found := Mnemonics[op]
+	if !found {
+		a.AddError(t.Pos, fmt.Sprintf("%s is not a valid mnemonic", t.StrVal))
+		return
+	}
+	param := a.param()
+	opCode, found := opCodes[param.mode]
+	if !found && param.mode == AM_Absolute {
+		// Maybe it's a relative branch? let's check
+		opCode, found = opCodes[AM_Relative]
+		if found {
+			// Yes, it is! Switch to relative addressing
+			param.mode = AM_Relative
+			param.val.MarkRelative()
+		}
+	}
+	if !found {
+		a.AddError(t.Pos, "Invalid parameter.")
+	}
+
+	// TODO(asigner): Add warning for JMP ($xxFF)
+	a.emit(expr.NewConst(int(opCode), 1))
+	if param.val != nil {
+		a.emit(param.val)
+	}
+}
+
+func (a *Assembler) recordMacro() {
+	t, labelPos, label := a.maybeLabel()
+
+	if !(t.Type == scanner.Ident && t.StrVal == ".endm") {
+		// Just another macro line, add it to the current macro
+		a.macro.text = append(a.macro.text, *a.scanner.Line())
+		return
+	}
+
+	// End of macro
+	if label != "" {
+		a.AddError(labelPos, "Labels not allowed for .org")
+	}
+	a.lineProcessor = (*Assembler).assembleLine
 }
 
 func (a *Assembler) findIncludeFile(f string) *string {
@@ -310,9 +418,11 @@ func (a *Assembler) param() param {
 	//       | "(" expr ") ""," "X"
 	//       | "(" expr ")" "," "Y"
 
+	startPos := a.lookahead.Pos
+
 	if a.lookahead.Type == scanner.Semicolon || a.lookahead.Type == scanner.Eol {
 		// No param, implied addressing mode'
-		return param{mode: AM_Implied}
+		return param{rawText: "", mode: AM_Implied}
 	}
 
 	switch a.lookahead.Type {
@@ -330,7 +440,8 @@ func (a *Assembler) param() param {
 		default:
 			node = a.expr(1)
 		}
-		return param{mode: am, val: node}
+		endPos := a.lookahead.Pos
+		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
 	case scanner.LParen:
 		// AM_AbsoluteIndirect // ($aaaa)
 		// AM_IndexedIndirect  // ($aa,X)
@@ -345,21 +456,22 @@ func (a *Assembler) param() param {
 			if node.ResultSize() > 1 {
 				// Let see if we can enforce size
 				if !node.ForceSize(1) {
-					a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
+					a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 				}
 			} else {
 				// We can't, so complain
-				a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
+				a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 			}
 			reg := a.lookahead.StrVal
 			pos := a.lookahead.Pos
 			a.match(scanner.Ident)
 			if strings.ToLower(reg) != "x" {
-				a.AddError(pos, fmt.Sprintf("Register X expected, found %s.", reg))
+				a.AddError(pos, "Register X expected, found %s.", reg)
 			}
 			am = AM_IndexedIndirect
 			a.match(scanner.RParen)
-			return param{mode: am, val: node}
+			endPos := a.lookahead.Pos
+			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
 		} else {
 			a.match(scanner.RParen)
 			if a.lookahead.Type == scanner.Comma {
@@ -368,27 +480,29 @@ func (a *Assembler) param() param {
 				if node.ResultSize() > 1 {
 					// Let see if we can enforce size
 					if !node.ForceSize(1) {
-						a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
+						a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 					}
 				} else {
 					// We can't, so complain
-					a.AddError(a.lookahead.Pos, fmt.Sprintf("Address $%x is too large, only 8 bits allowed", node.Eval()))
+					a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 				}
 				reg := a.lookahead.StrVal
 				pos := a.lookahead.Pos
 				a.match(scanner.Ident)
 				if strings.ToLower(reg) != "y" {
-					a.AddError(pos, fmt.Sprintf("Register Y expected, found %s.", reg))
+					a.AddError(pos, "Register Y expected, found %s.", reg)
 				}
 				am = AM_IndirectIndexed
 			}
-			return param{mode: am, val: node}
+			endPos := a.lookahead.Pos
+			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
 		}
 
 	default:
 		if a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "a" {
 			a.nextToken()
-			return param{mode: AM_Accumulator, val: nil}
+			endPos := a.lookahead.Pos
+			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: AM_Accumulator, val: nil}
 		}
 		am := AM_Absolute
 		node := a.expr(2)
@@ -399,12 +513,13 @@ func (a *Assembler) param() param {
 			pos := a.lookahead.Pos
 			a.match(scanner.String)
 			if strings.ToLower(s) != "x" && strings.ToLower(s) != "y" {
-				a.AddError(pos, fmt.Sprintf("Expected 'X' or 'Y', but got %s.", s))
+				a.AddError(pos, "Expected 'X' or 'Y', but got %s.", s)
 				s = "x"
 			}
 			am = am.withIndex(s)
 		}
-		return param{mode: am, val: node}
+		endPos := a.lookahead.Pos
+		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
 	}
 }
 
@@ -494,7 +609,7 @@ func (a *Assembler) factor(size int) expr.Node {
 	case scanner.Number:
 		val := a.lookahead.IntVal
 		if !checkSize(size, int(val)) {
-			a.AddError(a.lookahead.Pos, fmt.Sprintf("Constant $%x (decimal %d) is wider than %d bits", val, val, size*8))
+			a.AddError(a.lookahead.Pos, "Constant $%x (decimal %d) is wider than %d bits", val, val, size*8)
 			break
 		}
 		node = expr.NewConst(int(val), size)
@@ -517,7 +632,7 @@ func (a *Assembler) factor(size int) expr.Node {
 		a.match(scanner.RParen)
 	case scanner.Asterisk:
 		if size < 2 {
-			a.AddError(a.lookahead.Pos, fmt.Sprintf("Current PC is 16 bits wide, expected is a %d bit wide value", size*8))
+			a.AddError(a.lookahead.Pos, "Current PC is 16 bits wide, expected is a %d bit wide value", size*8)
 			break
 		}
 		node = expr.NewConst(a.section.PC(), size)
@@ -573,7 +688,7 @@ func (a *Assembler) registerPatch(pc int, n expr.Node) {
 
 func (a *Assembler) addLabel(pos text.Pos, label string) {
 	if _, found := a.symbols[label]; found {
-		a.AddError(pos, fmt.Sprintf("Symbol %q already defined.", label))
+		a.AddError(pos, "Symbol %q already defined.", label)
 		return
 	}
 
@@ -613,10 +728,10 @@ func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(st
 				for s := range syms {
 					symnames = append(symnames, s)
 				}
-				a.AddError(p, fmt.Sprintf("Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", ")))
+				a.AddError(p, "Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", "))
 				seen[symbol] = true
 			} else {
-				a.AddError(p, fmt.Sprintf("Undefined label %q", symbol))
+				a.AddError(p, "Undefined label %q", symbol)
 				seen[symbol] = true
 			}
 		}
@@ -626,7 +741,7 @@ func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(st
 			continue
 		}
 		if !seen[label] {
-			a.AddError(p, fmt.Sprintf("Undefined label %q", label))
+			a.AddError(p, "Undefined label %q", label)
 			seen[label] = true
 		}
 	}
@@ -675,8 +790,12 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 	}
 }
 
-func (a *Assembler) AddError(pos text.Pos, message string) {
-	a.errors = append(a.errors, errors.Error{pos, message})
+func (a *Assembler) AddError(pos text.Pos, message string, args... interface{}) {
+	err := errors.Error{pos, fmt.Sprintf(message, args...)}
+	if a.errorModifier != nil {
+		err = a.errorModifier.Modify(err)
+	}
+	a.errors = append(a.errors, err)
 }
 
 func (a *Assembler) Errors() []errors.Error {
@@ -693,7 +812,7 @@ func (a *Assembler) Warnings() []errors.Error {
 
 func (a *Assembler) match(t scanner.TokenType) {
 	if a.lookahead.Type != t {
-		a.AddError(a.lookahead.Pos, fmt.Sprintf("Expected %s, but found %s", t, a.lookahead.Type))
+		a.AddError(a.lookahead.Pos, "Expected %s, but found %s", t, a.lookahead.Type)
 	}
 	a.nextToken()
 }

@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"fmt"
 	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 	"strconv"
@@ -159,6 +158,14 @@ func (scanner *Scanner) CurPos() text.Pos {
 	}
 }
 
+func (scanner *Scanner) Filename() string {
+	return scanner.filename
+}
+
+func (scanner *Scanner) Line() *text.Line {
+	return &scanner.line
+}
+
 func (scanner *Scanner) Scan() Token {
 	// Scan over whitespace
 	ch := scanner.getch()
@@ -180,7 +187,7 @@ func (scanner *Scanner) Scan() Token {
 		t.StrVal = s
 		t.Type = Number
 		if err != nil {
-			scanner.errorSink.AddError(t.Pos, fmt.Sprintf("%s is not a valid number", t.StrVal))
+			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 		return t
 	case isIdentChar(ch):
@@ -199,7 +206,7 @@ func (scanner *Scanner) Scan() Token {
 		t.StrVal = t.StrVal + s
 		t.Type = Number
 		if err != nil {
-			scanner.errorSink.AddError(t.Pos, fmt.Sprintf("%s is not a valid number", t.StrVal))
+			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 	case ch == '"':
 		t.StrVal = ""
@@ -244,7 +251,7 @@ func (scanner *Scanner) Scan() Token {
 		t.StrVal = t.StrVal + s
 		t.Type = Number
 		if err != nil {
-			scanner.errorSink.AddError(t.Pos, fmt.Sprintf("%s is not a valid number", t.StrVal))
+			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 	case ch == '$':
 		t.StrVal = "$"
@@ -259,7 +266,7 @@ func (scanner *Scanner) Scan() Token {
 		t.StrVal = t.StrVal + s
 		t.Type = Number
 		if err != nil {
-			scanner.errorSink.AddError(t.Pos, fmt.Sprintf("%s is not a valid number", t.StrVal))
+			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 	case ch == '(':
 		t.Type = LParen
@@ -317,10 +324,12 @@ func (scanner *Scanner) readNumber(ch rune, base int, pred func(rune) bool) (int
 }
 
 func (scanner *Scanner) getch() rune {
+	var ch rune
 	if scanner.curCol >= len(scanner.line.Runes) {
-		return 0
+		ch = 0
+	} else {
+		ch = scanner.line.Runes[scanner.curCol]
 	}
-	ch := scanner.line.Runes[scanner.curCol]
 	scanner.curCol = scanner.curCol + 1
 	return ch
 }

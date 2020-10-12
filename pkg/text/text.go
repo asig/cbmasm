@@ -16,6 +16,10 @@ func (t *Text) LastLine() Line {
 	return t.Lines[len(t.Lines)-1]
 }
 
+func (l *Line) Extract(from, to Pos) string {
+	return string(l.Runes[from.Col-1:to.Col-1]);
+}
+
 func Process(filename string, text string) Text {
 	t := Text{
 		Filename: filename,
