@@ -25,7 +25,11 @@ type param struct {
 	val  expr.Node
 }
 
-
+type state int
+const (
+	stateAssemble state = iota
+	stateRecordMacro
+)
 
 type Assembler struct {
 	text         text.Text
@@ -39,7 +43,7 @@ type Assembler struct {
 	tokenBuf    scanner.Token
 	tokenBufSet bool
 
-	lineProcessor func(*Assembler)
+	state state
 
 	// current macro, only set when recording macros
 	macro *macro
@@ -75,18 +79,17 @@ func (a *Assembler) Assemble() {
 
 	a.assembleText(a.text)
 
-	p := text.Pos{Filename: a.text.Filename, Line: a.text.LastLine().LineNumber, Col: 1}
-	a.reportUnresolvedLabels(p, func(string) bool { return true })
+	a.reportUnresolvedLabels(func(string) bool { return true })
 }
 
 func (a *Assembler) assembleText(t text.Text) {
-	a.lineProcessor = (*Assembler).assembleLine
+	a.state = stateAssemble
 	for _, line := range t.Lines {
-		a.scanner = scanner.New(t.Filename, line, a)
+		a.scanner = scanner.New(line, a)
 		a.tokenBufSet = false
 		a.lookahead = a.scanner.Scan()
 
-		a.lineProcessor(a)
+		a.processLine()
 	}
 }
 
@@ -127,6 +130,13 @@ func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 		}
 	}
 	return t, labelPos, label
+}
+
+func (a *Assembler) processLine() {
+	switch(a.state) {
+	case stateAssemble: a.assembleLine()
+	case stateRecordMacro: a.recordMacro()
+	}
 }
 
 func (a *Assembler) assembleLine() {
@@ -272,7 +282,6 @@ func (a *Assembler) assembleLine() {
 		// label is macroname!
 		macroName := label
 		a.macro = &macro{
-			filename: a.scanner.Filename(),
 			pos: t.Pos,
 		}
 		if _, found := Mnemonics[macroName]; found {
@@ -292,7 +301,7 @@ func (a *Assembler) assembleLine() {
 				a.macroParam()
 			}
 		}
-		a.lineProcessor = (*Assembler).recordMacro
+		a.state = stateRecordMacro
 	case ".mend":
 		a.AddError(t.Pos, ".mend without .macro")
 	default:
@@ -344,7 +353,7 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 	}
 
 	// Get copy of macro with parameters substituted
-	t := text.Text{m.filename, m.replaceParams(actParams)}
+	t := text.Text{m.replaceParams(actParams)}
 
 	savedErrorModifier := a.errorModifier
 	a.errorModifier = &macroInvocation{callPos: callPos}
@@ -390,7 +399,7 @@ func (a *Assembler) recordMacro() {
 		a.AddError(t.Pos, "Nested macros are not allowed")
 	} else if !(t.Type == scanner.Ident && t.StrVal == ".endm") {
 		// Just another macro line, add it to the current macro
-		a.macro.text = append(a.macro.text, *a.scanner.Line())
+		a.macro.text.Lines = append(a.macro.text.Lines, *a.scanner.Line())
 		return
 	}
 
@@ -398,7 +407,7 @@ func (a *Assembler) recordMacro() {
 	if label != "" {
 		a.AddError(labelPos, "Labels not allowed for .endm")
 	}
-	a.lineProcessor = (*Assembler).assembleLine
+	a.state = stateAssemble
 }
 
 func (a *Assembler) findIncludeFile(f string) *string {
@@ -700,7 +709,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 	a.addSymbol(label, expr.NewConst(pc, 2))
 
 	if !isLocalLabel(label) {
-		a.reportUnresolvedLabels(pos, isLocalLabel)
+		a.reportUnresolvedLabels(isLocalLabel)
 		a.clearLocalLabels()
 	}
 }
@@ -718,8 +727,9 @@ func (a *Assembler) clearLocalLabels() {
 	}
 }
 
-func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(string) bool) {
-	p := text.Pos{Filename: a.text.Filename, Line: a.text.LastLine().LineNumber, Col: 1}
+func (a *Assembler) reportUnresolvedLabels(filterFunc func(string) bool) {
+	ll := a.text.LastLine()
+	p := text.Pos{Filename: ll.Filename, Line: ll.LineNumber, Col: 1}
 	seen := make(map[string]bool)
 	for symbol, node := range a.symbols {
 		if !filterFunc(symbol) {

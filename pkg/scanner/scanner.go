@@ -101,15 +101,13 @@ type Token struct {
 }
 
 type Scanner struct {
-	filename string
 	line      text.Line
 	curCol    int
 	errorSink errors.Sink
 }
 
-func New(filename string, line text.Line, errorSink errors.Sink) *Scanner {
+func New(line text.Line, errorSink errors.Sink) *Scanner {
 	return &Scanner{
-		filename: filename,
 		line:      line,
 		curCol:    0,
 		errorSink: errorSink,
@@ -144,7 +142,7 @@ func (scanner *Scanner) readIdent(ch rune) string {
 
 func (scanner *Scanner) LineStart() text.Pos {
 	return text.Pos{
-		Filename: scanner.filename,
+		Filename: scanner.line.Filename,
 		Line: scanner.line.LineNumber,
 		Col:  1,
 	}
@@ -152,14 +150,10 @@ func (scanner *Scanner) LineStart() text.Pos {
 
 func (scanner *Scanner) CurPos() text.Pos {
 	return text.Pos{
-		Filename: scanner.filename,
+		Filename: scanner.line.Filename,
 		Line: scanner.line.LineNumber,
 		Col:  scanner.curCol,
 	}
-}
-
-func (scanner *Scanner) Filename() string {
-	return scanner.filename
 }
 
 func (scanner *Scanner) Line() *text.Line {

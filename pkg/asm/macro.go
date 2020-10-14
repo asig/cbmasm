@@ -8,11 +8,10 @@ import (
 )
 
 type macro struct {
-	filename string
 	pos text.Pos
 
 	params []string
-	text []text.Line
+	text *text.Text
 }
 
 func (m *macro) addParam(name string) error {
@@ -40,9 +39,9 @@ func (m *macro) replaceParams(actuals []param) []text.Line {
 	}
 
 	var res []text.Line
-	for _, line := range m.text {
+	for _, line := range m.text.Lines {
 		substituted := substituteParams(line, paramMap)
-		res = append(res, text.Line{line.LineNumber, substituted})
+		res = append(res, text.Line{line.Filename, line.LineNumber, substituted})
 	}
 	return res
 }
@@ -62,7 +61,7 @@ func substituteParams(line text.Line, paramMap map[string]string) []rune {
 	var repls []replacement
 
 	// We don't care about errors at this point, they'll surface during instantiation
-	s := scanner.New("",  line, &dummyErrorSink{})
+	s := scanner.New(line, &dummyErrorSink{})
 	t := s.Scan()
 	for t.Type != scanner.Eol {
 		if t.Type == scanner.Ident {

@@ -3,11 +3,11 @@ package text
 import "strings"
 
 type Text struct {
-	Filename string
 	Lines []Line
 }
 
 type Line struct {
+	Filename string
 	LineNumber int
 	Runes      []rune
 }
@@ -21,9 +21,7 @@ func (l *Line) Extract(from, to Pos) string {
 }
 
 func Process(filename string, text string) Text {
-	t := Text{
-		Filename: filename,
-	}
+	t := Text{}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	curLine := Line{
 		LineNumber: 1,
@@ -34,6 +32,7 @@ func Process(filename string, text string) Text {
 		if r == '\n' {
 			t.Lines = append(t.Lines, curLine)
 			curLine = Line{
+				Filename: filename,
 				LineNumber: curLine.LineNumber + 1,
 				Runes:       []rune{},
 			}

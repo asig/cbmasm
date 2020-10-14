@@ -10,7 +10,7 @@ type errorSink struct {
 	e []errors.Error
 }
 
-func (e *errorSink) AddError(pos text.Pos, message string) {
+func (e *errorSink) AddError(pos text.Pos, message string, args ...interface{}) {
 	e.e = append(e.e, errors.Error{pos, message})
 }
 
@@ -46,7 +46,7 @@ func TestScanner_Scan_numbers(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			errors := errorSink{}
-			scanner := New("filename", test.text, &errors);
+			scanner := New(test.text, &errors);
 			got := scanner.Scan()
 			if got.Type != Number {
 				t.Errorf("got token type %s, expected %s", got.Type, Number)
@@ -83,7 +83,7 @@ func TestScanner_Scan_strings(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			errors := errorSink{}
-			scanner := New("filename", test.text, &errors);
+			scanner := New(test.text, &errors);
 			got := scanner.Scan()
 			if got.Type != String {
 				t.Errorf("got token type %s, expected %s", got.Type, String)
