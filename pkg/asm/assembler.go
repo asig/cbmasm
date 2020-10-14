@@ -311,6 +311,7 @@ func (a *Assembler) assembleLine() {
 		macroName := label
 		a.macro = &macro{
 			pos: t.Pos,
+			text: &text.Text{},
 		}
 		if _, found := Mnemonics[macroName]; found {
 			a.AddError(labelPos, "Can't use mnemonic %q as macro name", macroName)
