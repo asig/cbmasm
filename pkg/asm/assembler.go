@@ -154,7 +154,7 @@ func (a *Assembler) assembleLine() {
 		if label == "" {
 			a.AddError(labelPos, "Label is necessary")
 		}
-	case ".org", ".mend":
+	case ".org":
 		// must not have a label
 		if label != "" {
 			a.AddError(labelPos, "Labels not allowed for .org")
@@ -293,6 +293,8 @@ func (a *Assembler) assembleLine() {
 			}
 		}
 		a.lineProcessor = (*Assembler).recordMacro
+	case ".mend":
+		a.AddError(t.Pos, ".mend without .macro")
 	default:
 		if m, found := a.macros[op]; found {
 			a.handleMacroInstantiation(m, t.Pos)
@@ -384,7 +386,9 @@ func (a *Assembler) handleMnemonic(t scanner.Token) {
 func (a *Assembler) recordMacro() {
 	t, labelPos, label := a.maybeLabel()
 
-	if !(t.Type == scanner.Ident && t.StrVal == ".endm") {
+	if t.Type == scanner.Ident && t.StrVal == ".macro" {
+		a.AddError(t.Pos, "Nested macros are not allowed")
+	} else if !(t.Type == scanner.Ident && t.StrVal == ".endm") {
 		// Just another macro line, add it to the current macro
 		a.macro.text = append(a.macro.text, *a.scanner.Line())
 		return
@@ -392,7 +396,7 @@ func (a *Assembler) recordMacro() {
 
 	// End of macro
 	if label != "" {
-		a.AddError(labelPos, "Labels not allowed for .org")
+		a.AddError(labelPos, "Labels not allowed for .endm")
 	}
 	a.lineProcessor = (*Assembler).assembleLine
 }
