@@ -65,8 +65,8 @@ func main() {
 
 	t := text.Process(inputFilename, string(raw))
 
-	assembler := asm.New(t, strings.Split(*flagIncludeDirs, ":"))
-	assembler.Assemble()
+	assembler := asm.New(strings.Split(*flagIncludeDirs, ":"))
+	assembler.Assemble(t)
 	errors := assembler.Errors()
 	if len(errors) > 0 {
 		errorOutput.Printf("%d errors occurred:\n", len(errors))

@@ -21,19 +21,19 @@ type patch struct {
 
 type param struct {
 	rawText string // Only used in macro calls
-	mode AddressingMode
-	val  expr.Node
+	mode    AddressingMode
+	val     expr.Node
 }
 
 type state int
+
 const (
 	stateAssemble state = iota
 	stateRecordMacro
 )
 
 type Assembler struct {
-	text         text.Text
-	includePaths []string
+	includePaths  []string
 	errorModifier errors.Modifier
 
 	errors      []errors.Error
@@ -61,15 +61,14 @@ type Assembler struct {
 	macros map[string]*macro
 }
 
-func New(t text.Text, includePaths []string) *Assembler {
+func New(includePaths []string) *Assembler {
 	a := &Assembler{
-		text:         t,
 		includePaths: includePaths,
 	}
 	return a
 }
 
-func (a *Assembler) Assemble() {
+func (a *Assembler) Assemble(t text.Text) {
 	a.errors = nil
 	a.warnings = nil
 	a.section = nil
@@ -77,20 +76,61 @@ func (a *Assembler) Assemble() {
 	a.symbols = make(map[string]expr.Node)
 	a.macros = make(map[string]*macro)
 
-	a.assembleText(a.text)
+	t = a.resolveIncludes(t)
+	a.assembleText(t)
 
-	a.reportUnresolvedLabels(func(string) bool { return true })
+	ll := t.LastLine()
+	p := text.Pos{Filename: ll.Filename, Line: ll.LineNumber, Col: 1}
+	a.reportUnresolvedLabels(p, func(string) bool { return true })
+}
+
+func (a *Assembler) resolveIncludes(t text.Text) text.Text {
+	res := text.Text{}
+	for _, line := range t.Lines {
+		a.beginLine(line)
+
+		t, _, label := a.maybeLabel()
+		if t.Type == scanner.Ident && t.StrVal == "include" {
+			a.match(scanner.Ident)
+			p := a.lookahead.Pos
+			filename := a.lookahead.StrVal
+			a.match(scanner.String)
+			f := a.findIncludeFile(filename)
+			if f == nil {
+				a.AddError(p, "Can't find file %q in include paths.", filename)
+				res.AppendLine(line)
+				continue
+			}
+			content, err := ioutil.ReadFile(*f)
+			if err != nil {
+				a.AddError(p, "Can't read file %q: %s", *f, err)
+			}
+
+			if label != "" {
+				l := a.scanner.Line()
+				res.AppendLine(text.Line{l.Filename, l.LineNumber, []rune(label)})
+			}
+			included := a.resolveIncludes(text.Process(filename, string(content)))
+			res.Append(included)
+		} else {
+			res.AppendLine(*a.scanner.Line())
+		}
+	}
+	return res
 }
 
 func (a *Assembler) assembleText(t text.Text) {
 	a.state = stateAssemble
 	for _, line := range t.Lines {
-		a.scanner = scanner.New(line, a)
-		a.tokenBufSet = false
-		a.lookahead = a.scanner.Scan()
-
+		a.beginLine(line)
 		a.processLine()
 	}
+}
+
+func (a *Assembler) beginLine(line text.Line) {
+	a.scanner = scanner.New(line, a)
+	a.tokenBufSet = false
+	a.lookahead = a.scanner.Scan()
 }
 
 func (a *Assembler) Origin() int {
@@ -133,9 +173,11 @@ func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 }
 
 func (a *Assembler) processLine() {
-	switch(a.state) {
-	case stateAssemble: a.assembleLine()
-	case stateRecordMacro: a.recordMacro()
+	switch a.state {
+	case stateAssemble:
+		a.assembleLine()
+	case stateRecordMacro:
+		a.recordMacro()
 	}
 }
 
@@ -193,20 +235,6 @@ func (a *Assembler) assembleLine() {
 		for _, b := range data {
 			a.emit(expr.NewConst(int(b), 1))
 		}
-	case "include":
-		p := a.lookahead.Pos
-		filename := a.lookahead.StrVal
-		a.match(scanner.String)
-		f := a.findIncludeFile(filename)
-		if f == nil {
-			a.AddError(p, "Can't find file %q in include paths.", filename)
-			break
-		}
-		content, err := ioutil.ReadFile(*f)
-		if err != nil {
-			a.AddError(p, "Can't read file %q: %s", *f, err)
-		}
-		a.assembleText(text.Process(filename, string(content)))
 	case ".byte":
 		// handle byte consts
 		nodes := a.dbOp(1)
@@ -357,7 +385,7 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 
 	savedErrorModifier := a.errorModifier
 	a.errorModifier = &macroInvocation{callPos: callPos}
-	a.assembleText(t);
+	a.assembleText(t)
 	a.errorModifier = savedErrorModifier
 }
 
@@ -709,7 +737,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 	a.addSymbol(label, expr.NewConst(pc, 2))
 
 	if !isLocalLabel(label) {
-		a.reportUnresolvedLabels(isLocalLabel)
+		a.reportUnresolvedLabels(pos, isLocalLabel)
 		a.clearLocalLabels()
 	}
 }
@@ -727,9 +755,7 @@ func (a *Assembler) clearLocalLabels() {
 	}
 }
 
-func (a *Assembler) reportUnresolvedLabels(filterFunc func(string) bool) {
-	ll := a.text.LastLine()
-	p := text.Pos{Filename: ll.Filename, Line: ll.LineNumber, Col: 1}
+func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(string) bool) {
 	seen := make(map[string]bool)
 	for symbol, node := range a.symbols {
 		if !filterFunc(symbol) {
@@ -742,10 +768,10 @@ func (a *Assembler) reportUnresolvedLabels(filterFunc func(string) bool) {
 				for s := range syms {
 					symnames = append(symnames, s)
 				}
-				a.AddError(p, "Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", "))
+				a.AddError(errorPos, "Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", "))
 				seen[symbol] = true
 			} else {
-				a.AddError(p, "Undefined label %q", symbol)
+				a.AddError(errorPos, "Undefined label %q", symbol)
 				seen[symbol] = true
 			}
 		}
@@ -755,7 +781,7 @@ func (a *Assembler) reportUnresolvedLabels(filterFunc func(string) bool) {
 			continue
 		}
 		if !seen[label] {
-			a.AddError(p, "Undefined label %q", label)
+			a.AddError(errorPos, "Undefined label %q", label)
 			seen[label] = true
 		}
 	}
@@ -804,7 +830,7 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 	}
 }
 
-func (a *Assembler) AddError(pos text.Pos, message string, args... interface{}) {
+func (a *Assembler) AddError(pos text.Pos, message string, args ...interface{}) {
 	err := errors.Error{pos, fmt.Sprintf(message, args...)}
 	if a.errorModifier != nil {
 		err = a.errorModifier.Modify(err)

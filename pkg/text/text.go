@@ -12,6 +12,14 @@ type Line struct {
 	Runes      []rune
 }
 
+func (t *Text) Append(text Text) {
+	t.Lines = append(t.Lines,  text.Lines...)
+}
+
+func (t *Text) AppendLine(l Line) {
+	t.Lines = append(t.Lines,  l)
+}
+
 func (t *Text) LastLine() Line {
 	return t.Lines[len(t.Lines)-1]
 }
@@ -24,6 +32,7 @@ func Process(filename string, text string) Text {
 	t := Text{}
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	curLine := Line{
+		Filename: filename,
 		LineNumber: 1,
 		Runes:       []rune{},
 	}
