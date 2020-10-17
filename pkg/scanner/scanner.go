@@ -4,6 +4,7 @@ import (
 	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 	"strconv"
+	"strings"
 	"unicode"
 )
 
@@ -29,68 +30,101 @@ const (
 	Semicolon
 	Comma
 	Lt
+	Le
 	Gt
+	Ge
 	Eq
+	Ne
 	Hash
 	Tilde
 	Caret
+
+	// directives
+	Ifdef
+	Ifndef
+	If
+	Else
+	Endif
+	Fail
+	Include
+	Incbin
+	Reserve
+	Byte
+	Word
+	Equ
+	Org
+	Macro
+	Endm
+
 	Eol
 )
 
+var identToTokenType = map[string]TokenType{
+	".ifdef":   Ifdef,
+	".ifndef":  Ifndef,
+	".if":      If,
+	".else":    Else,
+	".endif":   Endif,
+	".fail":    Fail,
+	".include": Include,
+	".incbin'": Incbin,
+	".reserve": Reserve,
+	".byte":    Byte,
+	".word":    Word,
+	".equ":     Equ,
+	".org":     Org,
+	".macro":   Macro,
+	".endm":    Endm,
+}
+
+var tokenTypeToString = map[TokenType]string{
+	Unknown:   "<unknown>",
+	Ident:     "identifier",
+	Number:    "number",
+	String:    "string",
+	LParen:    "'('",
+	RParen:    "')'",
+	Plus:      "'+'",
+	Minus:     "'-'",
+	Slash:     "'/'",
+	Asterisk:  "'*'",
+	Percent:   "'%'",
+	Dollar:    "'$'",
+	Ampersand: "'&'",
+	Bar:       "'|'",
+	Dot:       "'.'",
+	Colon:     "':'",
+	Semicolon: "';'",
+	Comma:     "'.'",
+	Lt:        "'<'",
+	Le:        "'<='",
+	Gt:        "'>'",
+	Ge:        "'>='",
+	Eq:        "'='",
+	Ne:        "'!='",
+	Hash:      "'#'",
+	Tilde:     "'~'",
+	Caret:     "'^'",
+	Ifdef:     ".ifdef",
+	Ifndef:    ".ifndef",
+	If:        ".if",
+	Else:      ".else",
+	Endif:     ".endif",
+	Fail:      ".fail",
+	Include:   ".include",
+	Incbin:    ".incbin'",
+	Reserve:   ".reserve",
+	Byte:      ".byte",
+	Word:      ".word",
+	Equ:       ".equ",
+	Org:       ".org",
+	Macro:     ".macro",
+	Endm:      ".endm",
+	Eol:       "EOL",
+}
+
 func (t TokenType) String() string {
-	switch t {
-	case Unknown:
-		return "<unknown>"
-	case Ident:
-		return "identifier"
-	case Number:
-		return "number"
-	case String:
-		return "string"
-	case LParen:
-		return "'('"
-	case RParen:
-		return "')'"
-	case Plus:
-		return "'+'"
-	case Minus:
-		return "'-'"
-	case Slash:
-		return "'/'"
-	case Asterisk:
-		return "'*'"
-	case Percent:
-		return "'%'"
-	case Dollar:
-		return "'$'"
-	case Ampersand:
-		return "'&'"
-	case Bar:
-		return "'|'"
-	case Dot:
-		return "'.'"
-	case Colon:
-		return "':'"
-	case Semicolon:
-		return "';'"
-	case Comma:
-		return "','"
-	case Lt:
-		return "'<'"
-	case Gt:
-		return "'>'"
-	case Eq:
-		return "'='"
-	case Hash:
-		return "'#'"
-	case Tilde:
-		return "'~'"
-	case Caret:
-		return "'^'"
-	case Eol:
-		return "EOL"
-	}
-	panic("CAN'T HAPPEN!")
+	return tokenTypeToString[t]
 }
 
 type Token struct {
@@ -143,16 +177,16 @@ func (scanner *Scanner) readIdent(ch rune) string {
 func (scanner *Scanner) LineStart() text.Pos {
 	return text.Pos{
 		Filename: scanner.line.Filename,
-		Line: scanner.line.LineNumber,
-		Col:  1,
+		Line:     scanner.line.LineNumber,
+		Col:      1,
 	}
 }
 
 func (scanner *Scanner) CurPos() text.Pos {
 	return text.Pos{
 		Filename: scanner.line.Filename,
-		Line: scanner.line.LineNumber,
-		Col:  scanner.curCol,
+		Line:     scanner.line.LineNumber,
+		Col:      scanner.curCol,
 	}
 }
 
@@ -186,7 +220,11 @@ func (scanner *Scanner) Scan() Token {
 		return t
 	case isIdentChar(ch):
 		t.StrVal = scanner.readIdent(ch)
-		t.Type = Ident
+		if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
+			t.Type = tt
+		} else {
+			t.Type = Ident
+		}
 	case ch == '%':
 		t.StrVal = "%"
 		ch = scanner.getch()
@@ -262,6 +300,14 @@ func (scanner *Scanner) Scan() Token {
 		if err != nil {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
+	case ch == '!':
+		ch = scanner.getch()
+		if ch == '=' {
+			t.StrVal = "!="
+			t.Type = Ne
+			return t
+		}
+		scanner.ungetch()
 	case ch == '(':
 		t.Type = LParen
 	case ch == ')':
@@ -291,8 +337,22 @@ func (scanner *Scanner) Scan() Token {
 	case ch == ':':
 		t.Type = Colon
 	case ch == '<':
+		ch = scanner.getch()
+		if ch == '=' {
+			t.StrVal = "<="
+			t.Type = Le
+			return t
+		}
+		scanner.ungetch()
 		t.Type = Lt
 	case ch == '>':
+		ch = scanner.getch()
+		if ch == '=' {
+			t.StrVal = ">="
+			t.Type = Ge
+			return t
+		}
+		scanner.ungetch()
 		t.Type = Gt
 	case ch == '=':
 		t.Type = Eq
