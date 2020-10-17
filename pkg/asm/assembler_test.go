@@ -71,12 +71,66 @@ _l1   brk
 `,
 			want: []byte{0x02, 0x01, 0x04, 0x03},
 		},
+
+		{
+			name: "conditional assembly - ifdef",
+			text: ` .org 0
+foo .equ 1
+	.ifdef foo
+	.byte $01,$02,$03,$04
+	.else
+	.byte $05,$06,$07,$08
+	.endif
+	.ifdef bar
+	.byte $09,$0a,$0b,$0c
+	.else
+	.byte $0d,$0e,$0f,$10
+	.endif
+`,
+			want: []byte{0x01, 0x02, 0x03, 0x04, 0x0d, 0x0e, 0x0f, 0x10},
+		},
+
+		{
+			name: "conditional assembly - ifndef",
+			text: ` .org 0
+foo .equ 1
+	.ifndef foo
+	.byte $01,$02,$03,$04
+	.else
+	.byte $05,$06,$07,$08
+	.endif
+	.ifndef bar
+	.byte $09,$0a,$0b,$0c
+	.else
+	.byte $0d,$0e,$0f,$10
+	.endif
+`,
+			want: []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c},
+		},
+
+		{
+			name: "conditional assembly - if",
+			text: ` .org 0
+foo .equ 1
+	.if foo = 1
+	.byte $01,$02,$03,$04
+	.else
+	.byte $05,$06,$07,$08
+	.endif
+	.if foo > 0
+	.byte $09,$0a,$0b,$0c
+	.else
+	.byte $0d,$0e,$0f,$10
+	.endif
+`,
+			want: []byte{0x01, 0x02, 0x03, 0x04, 0x09, 0x0a, 0x0b, 0x0c},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New(text.Process("", test.text), []string{})
-			assembler.Assemble()
+			assembler := New([]string{})
+			assembler.Assemble(text.Process("", test.text))
 			errors := assembler.Errors()
 			if len(errors) != 0 {
 				t.Errorf("Got %+v, want 0 errors", errors)
