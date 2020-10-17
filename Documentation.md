@@ -1,3 +1,6 @@
+Overview
+========
+
 Labels
 ======
 Labels need to terminate with ":" unless they start at the beginning of the line.
@@ -7,20 +10,38 @@ Local labels
 A local label is a label that starts with an underscore (`_`).
 All local labels are only visible (and need to be resolved) before the next non-local label. 
 
+Macros
+======
+TODO
+
+Conditional assembly
+====================
+TODO
+
 Syntax
 ======
 
+```
 line := [ident[":"]] [op] [";" comment]
 
-
 op := ".macro" [ident {"," ident }]
-    | ".mend"
+    | ".endm"
+    | ".ifdef" ident
+    | ".ifndef" ident
+    | ".if" expr [relOp expr]
+    | ".else"
+    | ".endif"
+    | ".include" string
+    | ".incbin" string
+    | ".fail" string
     | ".equ" expr
     | ".org" expr
     | ".byte" dbOp {"," dbOp }
     | ".word" dbOp {"," dbOp }
     | ".reserve" expr ["," dbOp ] 
     | ident [ param {"," param } ].
+
+relOp := ["==" | "!=" | "<=" | "<" | ">=" | >"] .
 
 dbOp := ["<"|">"] expr | string .
 
@@ -50,9 +71,5 @@ number  := digit { digit }
          | "$" hexDigit { hexDigit } .
 ident := identChar { identChar | digit }.
 identChar := "@" | "." | "_" | alpha .  
- 
-
-
-
-
+```
 
