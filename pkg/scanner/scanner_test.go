@@ -1,9 +1,28 @@
+/*
+ * Copyright (c) 2020 Andreas Signer <asigner@gmail.com>
+ *
+ * This file is part of cbmasm.
+ *
+ * cbmasm is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * cbmasm is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with cbmasm.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package scanner
 
 import (
+	"testing"
+
 	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
-	"testing"
 )
 
 type errorSink struct {
@@ -14,8 +33,6 @@ func (e *errorSink) AddError(pos text.Pos, message string, args ...interface{}) 
 	e.e = append(e.e, errors.Error{pos, message})
 }
 
-
-
 func TestScanner_Scan_numbers(t *testing.T) {
 	tests := []struct {
 		name string
@@ -24,7 +41,7 @@ func TestScanner_Scan_numbers(t *testing.T) {
 	}{
 		{
 			name: "Binary",
-			text: text.Process("filename","%1001").Lines[0],
+			text: text.Process("filename", "%1001").Lines[0],
 			want: 9,
 		},
 		{
@@ -46,7 +63,7 @@ func TestScanner_Scan_numbers(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			errors := errorSink{}
-			scanner := New(test.text, &errors);
+			scanner := New(test.text, &errors)
 			got := scanner.Scan()
 			if got.Type != Number {
 				t.Errorf("got token type %s, expected %s", got.Type, Number)
@@ -71,7 +88,7 @@ func TestScanner_Scan_strings(t *testing.T) {
 		},
 		{
 			name: "Escaped quote",
-			text: text.Process("filename",`"What\"ever!"`).Lines[0],
+			text: text.Process("filename", `"What\"ever!"`).Lines[0],
 			want: `What"ever!`,
 		},
 		{
@@ -83,7 +100,7 @@ func TestScanner_Scan_strings(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			errors := errorSink{}
-			scanner := New(test.text, &errors);
+			scanner := New(test.text, &errors)
 			got := scanner.Scan()
 			if got.Type != String {
 				t.Errorf("got token type %s, expected %s", got.Type, String)

@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2020 Andreas Signer <asigner@gmail.com>
+ *
+ * This file is part of cbmasm.
+ *
+ * cbmasm is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * cbmasm is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with cbmasm.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package main
 
 import (
@@ -12,13 +30,13 @@ import (
 )
 
 var (
-	errorOutput = log.New(os.Stderr, "", 0)
+	errorOutput  = log.New(os.Stderr, "", 0)
 	statusOutput = log.New(os.Stdout, "", 0)
 )
 
 var (
 	flagIncludeDirs = flag.String("I", ".", "include paths")
-	flagPlain = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
+	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 )
 
 func usage() {
@@ -38,10 +56,10 @@ func main() {
 	if len(args) > 0 {
 		inputFilename = args[0]
 		inputFile, err = os.Open(inputFilename)
-		defer inputFile.Close()
 		if err != nil {
 			log.Fatalf("Can't open input file %q.", inputFilename)
 		}
+		defer inputFile.Close()
 	}
 	if len(args) > 1 {
 		outputFilename = args[1]
@@ -85,7 +103,7 @@ func main() {
 		return
 	}
 
-	if (!*flagPlain) {
+	if !*flagPlain {
 		o := assembler.Origin()
 		outputFile.Write([]byte{byte(o & 0xff), byte((o >> 8) & 0xff)})
 	}
