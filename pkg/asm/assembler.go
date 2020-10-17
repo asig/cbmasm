@@ -32,6 +32,23 @@ const (
 	stateRecordMacro
 )
 
+var conditionalTokens = map[scanner.TokenType]bool{
+	scanner.Ifdef:  true,
+	scanner.If:     true,
+	scanner.Ifndef: true,
+	scanner.Else:   true,
+	scanner.Endif:  true,
+}
+
+var relOpToBinOp = map[scanner.TokenType]expr.BinaryOp{
+	scanner.Eq: expr.Eq,
+	scanner.Ne: expr.Ne,
+	scanner.Lt: expr.Lt,
+	scanner.Le: expr.Le,
+	scanner.Gt: expr.Gt,
+	scanner.Ge: expr.Ge,
+}
+
 type Assembler struct {
 	includePaths  []string
 	errorModifier errors.Modifier
@@ -43,7 +60,8 @@ type Assembler struct {
 	tokenBuf    scanner.Token
 	tokenBufSet bool
 
-	state state
+	assemblyEnabled stack
+	state           state
 
 	// current macro, only set when recording macros
 	macro *macro
@@ -75,13 +93,21 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.patchesPerLabel = make(map[string][]patch)
 	a.symbols = make(map[string]expr.Node)
 	a.macros = make(map[string]*macro)
+	a.assemblyEnabled = stack{}
+	a.assemblyEnabled.push(true)
 
 	t = a.resolveIncludes(t)
 	a.assembleText(t)
 
 	ll := t.LastLine()
 	p := text.Pos{Filename: ll.Filename, Line: ll.LineNumber, Col: 1}
+	if a.state == stateRecordMacro {
+		a.AddError(p, ".endm expected")
+	}
 	a.reportUnresolvedLabels(p, func(string) bool { return true })
+	if a.assemblyEnabled.len() > 1 {
+		a.AddError(p, ".endif expected")
+	}
 }
 
 func (a *Assembler) resolveIncludes(t text.Text) text.Text {
@@ -173,53 +199,111 @@ func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 }
 
 func (a *Assembler) processLine() {
-	switch a.state {
-	case stateAssemble:
-		a.assembleLine()
-	case stateRecordMacro:
-		a.recordMacro()
+	t, labelPos, label := a.maybeLabel()
+
+	if _, found := conditionalTokens[t.Type]; found {
+		a.maybeAddLabel(labelPos, label)
+		switch t.Type {
+		case scanner.Ifdef, scanner.Ifndef:
+			negate := t.Type == scanner.Ifndef
+			a.nextToken()
+			s := a.lookahead.StrVal
+			a.match(scanner.Ident)
+			_, found := a.symbols[s]
+			if negate {
+				found = !found
+			}
+			a.assemblyEnabled.push(a.assemblyEnabled.top() && found)
+
+		case scanner.If:
+			a.nextToken()
+			p := a.lookahead.Pos
+			e := a.expr(2)
+			if containsKey(relOpToBinOp, a.lookahead.Type) {
+				binOp := relOpToBinOp[a.lookahead.Type]
+				a.nextToken()
+				e2 := a.expr(2)
+				e = expr.NewBinaryOp(e, e2, binOp)
+			}
+			if !e.IsResolved() {
+				a.AddError(p, "expression is not resolved")
+				e = expr.NewConst(1, 1)
+			}
+			a.assemblyEnabled.push(a.assemblyEnabled.top() && (e.Eval() != 0))
+
+		case scanner.Else:
+			a.nextToken()
+			if a.assemblyEnabled.len() == 1 {
+				a.AddError(t.Pos, ".else without .if/.ifdef/.ifndef")
+				return
+			}
+			v := a.assemblyEnabled.pop()
+			a.assemblyEnabled.push(a.assemblyEnabled.top() && !v)
+
+		case scanner.Endif:
+			a.nextToken()
+			if a.assemblyEnabled.len() == 1 {
+				a.AddError(t.Pos, ".endif without .if/.ifdef/.ifndef")
+				return
+			}
+			a.assemblyEnabled.pop()
+		}
+		a.matchEol()
+	} else {
+		if !a.assemblyEnabled.top() {
+			// conditionally assembly is turned off, ignore this liune
+			return
+		}
+		switch a.state {
+		case stateAssemble:
+			a.assembleLine(t, labelPos, label)
+		case stateRecordMacro:
+			a.recordMacro()
+		}
+		a.matchEol()
 	}
 }
 
-func (a *Assembler) assembleLine() {
-	t, labelPos, label := a.maybeLabel()
+func (a *Assembler) matchEol() {
+	if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
+		a.AddError(a.lookahead.Pos, "';' or EOL expected")
+	}
+}
 
+func (a *Assembler) maybeAddLabel(labelPos text.Pos, label string) {
+	if label == "" {
+		return
+	}
+	a.addLabel(labelPos, label)
+}
+
+func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label string) {
 	if t.Type == scanner.Semicolon || t.Type == scanner.Eol {
 		// Empty line. Add a label if necessary, and bail out.
-		if label != "" {
-			a.addLabel(labelPos, label)
-		}
+		a.maybeAddLabel(labelPos, label)
 		return
 	}
-
-	if t.Type != scanner.Ident {
-		a.AddError(t.Pos, "expected %s, got %s", scanner.Ident, t.Type)
-		return
-	}
-	op := strings.ToLower(t.StrVal)
-	a.nextToken()
 
 	// Label checks
-	switch op {
-	case ".equ", ".macro":
+	switch t.Type {
+	case scanner.Equ, scanner.Macro:
 		// Label will be treated as name
 		if label == "" {
 			a.AddError(labelPos, "Label is necessary")
 		}
-	case ".org":
-		// must not have a label
+	case scanner.Org:
+		// Can't have a label
 		if label != "" {
-			a.AddError(labelPos, "Labels not allowed for .org")
+			a.AddError(labelPos, "Label is not allowed")
 		}
 	default:
 		// In all other cases, add a label
-		if label != "" {
-			a.addLabel(labelPos, label)
-		}
+		a.maybeAddLabel(labelPos, label)
 	}
 
-	switch op {
-	case "incbin":
+	switch t.Type {
+	case scanner.Incbin:
+		a.nextToken()
 		p := a.lookahead.Pos
 		filename := a.lookahead.StrVal
 		a.match(scanner.String)
@@ -235,7 +319,8 @@ func (a *Assembler) assembleLine() {
 		for _, b := range data {
 			a.emit(expr.NewConst(int(b), 1))
 		}
-	case ".byte":
+	case scanner.Byte:
+		a.nextToken()
 		// handle byte consts
 		nodes := a.dbOp(1)
 		for a.lookahead.Type == scanner.Comma {
@@ -244,7 +329,8 @@ func (a *Assembler) assembleLine() {
 			nodes = append(nodes, n2...)
 		}
 		a.emit(nodes...)
-	case ".reserve":
+	case scanner.Reserve:
+		a.nextToken()
 		// handle byte const
 		pos := a.lookahead.Pos
 		valNode := expr.NewConst(0, 1)
@@ -265,7 +351,8 @@ func (a *Assembler) assembleLine() {
 		for i := 0; i < sizeNode.Eval(); i++ {
 			a.emit(valNode)
 		}
-	case ".word":
+	case scanner.Word:
+		a.nextToken()
 		// handle wird const
 		nodes := a.dbOp(2)
 		for a.lookahead.Type == scanner.Comma {
@@ -274,7 +361,8 @@ func (a *Assembler) assembleLine() {
 			nodes = append(nodes, n2...)
 		}
 		a.emit(nodes...)
-	case ".org":
+	case scanner.Org:
+		a.nextToken()
 		// set origin
 		orgNode := a.expr(2)
 		org := 0
@@ -298,7 +386,8 @@ func (a *Assembler) assembleLine() {
 		} else {
 			a.section = NewSection(org)
 		}
-	case ".equ":
+	case scanner.Equ:
+		a.nextToken()
 		// label is equ name!
 		if _, found := a.symbols[label]; found {
 			a.AddError(t.Pos, "Symbol %s already exists.", label)
@@ -306,11 +395,17 @@ func (a *Assembler) assembleLine() {
 		}
 		val := a.expr(2)
 		a.addSymbol(label, val)
-	case ".macro":
+	case scanner.Fail:
+		a.nextToken()
+		s := a.lookahead.StrVal
+		a.match(scanner.String)
+		a.AddError(t.Pos, s)
+	case scanner.Macro:
+		a.nextToken()
 		// label is macroname!
 		macroName := label
 		a.macro = &macro{
-			pos: t.Pos,
+			pos:  t.Pos,
 			text: &text.Text{},
 		}
 		if _, found := Mnemonics[macroName]; found {
@@ -331,19 +426,20 @@ func (a *Assembler) assembleLine() {
 			}
 		}
 		a.state = stateRecordMacro
-	case ".mend":
+	case scanner.Endm:
 		a.AddError(t.Pos, ".mend without .macro")
-	default:
+	case scanner.Ident:
+		op := strings.ToLower(t.StrVal)
+		a.nextToken()
 		if m, found := a.macros[op]; found {
 			a.handleMacroInstantiation(m, t.Pos)
 		} else {
 			// must be a mnemonic
 			a.handleMnemonic(t)
 		}
-
-		if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
-			a.AddError(a.lookahead.Pos, "';' or EOL expected")
-		}
+	default:
+		a.AddError(t.Pos, "Identifier or directive expected")
+		return
 	}
 }
 
@@ -424,19 +520,25 @@ func (a *Assembler) handleMnemonic(t scanner.Token) {
 func (a *Assembler) recordMacro() {
 	t, labelPos, label := a.maybeLabel()
 
-	if t.Type == scanner.Ident && t.StrVal == ".macro" {
+	switch t.Type {
+	case scanner.Macro:
 		a.AddError(t.Pos, "Nested macros are not allowed")
-	} else if !(t.Type == scanner.Ident && t.StrVal == ".endm") {
+	case scanner.Endm:
+		// End of macro
+		a.nextToken() // Read over ".endm"
+		if label != "" {
+			a.AddError(labelPos, "Labels not allowed for .endm")
+		}
+		a.state = stateAssemble
+	default:
 		// Just another macro line, add it to the current macro
 		a.macro.text.Lines = append(a.macro.text.Lines, *a.scanner.Line())
-		return
-	}
 
-	// End of macro
-	if label != "" {
-		a.AddError(labelPos, "Labels not allowed for .endm")
+		// Scan until we're at EOL to keep processLine() happy
+		for a.lookahead.Type != scanner.Eol {
+			a.nextToken()
+		}
 	}
-	a.state = stateAssemble
 }
 
 func (a *Assembler) findIncludeFile(f string) *string {
@@ -744,7 +846,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 }
 
 func (a *Assembler) clearLocalLabels() {
-	for symbol, _ := range a.symbols {
+	for symbol := range a.symbols {
 		if isLocalLabel(symbol) {
 			delete(a.symbols, symbol)
 		}
