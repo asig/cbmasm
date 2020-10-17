@@ -13,6 +13,12 @@ const (
 	And
 	Or
 	Xor
+	Eq
+	Ne
+	Lt
+	Le
+	Gt
+	Ge
 )
 
 type BinaryOpNode struct {
@@ -46,6 +52,13 @@ func (n *BinaryOpNode) ForceSize(size int) bool {
 	return b1 && b2
 }
 
+func (n *BinaryOpNode) boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func (n *BinaryOpNode) Eval() int {
 	if !n.IsResolved() {
 		panic("Can't evaluate non-const expr node")
@@ -69,6 +82,18 @@ func (n *BinaryOpNode) Eval() int {
 		return l | r
 	case Xor:
 		return l ^ r
+	case Eq:
+		return n.boolToInt(l == r)
+	case Ne:
+		return n.boolToInt(l != r)
+	case Lt:
+		return n.boolToInt(l < r)
+	case Le:
+		return n.boolToInt(l <= r)
+	case Gt:
+		return n.boolToInt(l > r)
+	case Ge:
+		return n.boolToInt(l >= r)
 	}
 	panic(fmt.Sprintf("Unimplemented BinaryOp %d", n.op))
 }
