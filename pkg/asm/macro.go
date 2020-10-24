@@ -49,11 +49,11 @@ func (m *macro) paramIndex(name string) int {
 	return -1
 }
 
-func (m *macro) replaceParams(actuals []param) []text.Line {
+func (m *macro) replaceParams(actuals []string) []text.Line {
 
 	paramMap := make(map[string]string)
 	for idx, p := range m.params {
-		paramMap[p] = actuals[idx].rawText
+		paramMap[p] = actuals[idx]
 	}
 
 	var res []text.Line

@@ -482,17 +482,18 @@ func (i *macroInvocation) Modify(err errors.Error) errors.Error {
 func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 	// Read actual params
 	paramStart := a.lookahead.Pos
-	var actParams []param
+	var actParams []string
 	if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
-		actParams = append(actParams, a.param())
+		actParams = append(actParams, a.actMacroParam())
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			actParams = append(actParams, a.param())
+			actParams = append(actParams, a.actMacroParam())
 		}
 	}
 
 	if len(actParams) != len(m.params) {
 		a.AddError(paramStart, "Wrong number of arguments: %d expected, %d found", len(m.params), len(actParams))
+		return
 	}
 
 	// Get copy of macro with parameters substituted
@@ -567,6 +568,15 @@ func (a *Assembler) findIncludeFile(f string) *string {
 		}
 	}
 	return nil
+}
+
+func (a *Assembler) actMacroParam() string {
+	// param := expr .
+
+	startPos := a.lookahead.Pos
+	a.expr(2)
+	endPos := a.lookahead.Pos
+	return strings.TrimSpace(a.scanner.Line().Extract(startPos, endPos))
 }
 
 func (a *Assembler) param() param {

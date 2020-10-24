@@ -39,7 +39,15 @@ op := ".macro" [ident {"," ident }]
     | ".byte" dbOp {"," dbOp }
     | ".word" dbOp {"," dbOp }
     | ".reserve" expr ["," dbOp ] 
-    | ident [ param {"," param } ].
+    | mnemonic [ param {"," param } ]
+    | macroname [ actmacroparam {"," actmacroparam } ]
+.
+                                         
+mnemonic := ident .
+
+macroname := ident .
+                    
+actmacroparam := expr .
 
 relOp := ["==" | "!=" | "<=" | "<" | ">=" | >"] .
 
