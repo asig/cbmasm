@@ -18,7 +18,12 @@
  */
 package expr
 
+import (
+	"github.com/asig/cbmasm/pkg/text"
+)
+
 type SymbolRefNode struct {
+	pos        text.Pos
 	symbol     string
 	maxSize    int
 	val        int
@@ -26,8 +31,9 @@ type SymbolRefNode struct {
 	isRelative bool
 }
 
-func NewSymbolRef(symbol string, maxSize, val int) Node {
+func NewSymbolRef(pos text.Pos, symbol string, maxSize, val int) Node {
 	return &SymbolRefNode{
+		pos:        pos,
 		symbol:     symbol,
 		maxSize:    maxSize,
 		val:        val,
@@ -36,8 +42,9 @@ func NewSymbolRef(symbol string, maxSize, val int) Node {
 	}
 }
 
-func NewUnresolvedSymbol(symbol string, maxSize int) Node {
+func NewUnresolvedSymbol(pos text.Pos, symbol string, maxSize int) Node {
 	return &SymbolRefNode{
+		pos:        pos,
 		symbol:     symbol,
 		maxSize:    maxSize,
 		val:        0,
@@ -95,4 +102,8 @@ func (n *SymbolRefNode) MarkRelative() {
 
 func (n *SymbolRefNode) IsRelative() bool {
 	return n.isRelative
+}
+
+func (n *SymbolRefNode) Pos() text.Pos {
+	return n.pos
 }

@@ -18,7 +18,11 @@
  */
 package expr
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/asig/cbmasm/pkg/text"
+)
 
 type BinaryOp int
 
@@ -143,4 +147,8 @@ func (n *BinaryOpNode) MarkRelative() {
 
 func (n *BinaryOpNode) IsRelative() bool {
 	return n.left.IsRelative() || n.right.IsRelative()
+}
+
+func (n *BinaryOpNode) Pos() text.Pos {
+	return n.left.Pos()
 }

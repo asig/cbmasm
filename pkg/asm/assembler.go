@@ -245,7 +245,7 @@ func (a *Assembler) processLine() {
 			}
 			if !e.IsResolved() {
 				a.AddError(p, "expression is not resolved")
-				e = expr.NewConst(1, 1)
+				e = expr.NewConst(p, 1, 1)
 			}
 			a.assemblyEnabled.push(a.assemblyEnabled.top() && (e.Eval() != 0))
 
@@ -335,7 +335,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			a.AddError(p, "Can't read file %q: %s", *f, err)
 		}
 		for _, b := range data {
-			a.emit(expr.NewConst(int(b), 1))
+			a.emit(expr.NewConst(p, int(b), 1))
 		}
 	case scanner.Byte:
 		a.nextToken()
@@ -351,11 +351,11 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.nextToken()
 		// handle byte const
 		pos := a.lookahead.Pos
-		valNode := expr.NewConst(0, 1)
+		valNode := expr.NewConst(pos, 0, 1)
 		sizeNode := a.expr(2)
 		if !sizeNode.IsResolved() {
 			a.AddError(pos, "Expression is unresolved")
-			sizeNode = expr.NewConst(1, 2)
+			sizeNode = expr.NewConst(pos, 1, 2)
 		}
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
@@ -402,7 +402,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 				toAdd = toAdd - 1
 			}
 		} else {
-			a.section = NewSection(org)
+			a.section = NewSection(org, a)
 		}
 	case scanner.Equ:
 		a.nextToken()
@@ -529,7 +529,7 @@ func (a *Assembler) handleMnemonic(t scanner.Token) {
 	}
 
 	// TODO(asigner): Add warning for JMP ($xxFF)
-	a.emit(expr.NewConst(int(opCode), 1))
+	a.emit(expr.NewConst(t.Pos, int(opCode), 1))
 	if param.val != nil {
 		a.emit(param.val)
 	}
@@ -592,13 +592,14 @@ func (a *Assembler) param() param {
 		am := AM_Immediate
 		var node expr.Node
 		a.nextToken()
+		p := a.lookahead.Pos
 		switch a.lookahead.Type {
 		case scanner.Lt:
 			a.nextToken()
-			node = expr.NewUnaryOp(a.expr(2), expr.LoByte)
+			node = expr.NewUnaryOp(p, a.expr(2), expr.LoByte)
 		case scanner.Gt:
 			a.nextToken()
-			node = expr.NewUnaryOp(a.expr(2), expr.HiByte)
+			node = expr.NewUnaryOp(p, a.expr(2), expr.HiByte)
 		default:
 			node = a.expr(1)
 		}
@@ -686,21 +687,22 @@ func (a *Assembler) param() param {
 }
 
 func (a *Assembler) dbOp(size int) []expr.Node {
+	p := a.lookahead.Pos
 	switch a.lookahead.Type {
 	case scanner.Lt:
 		a.nextToken()
 		n := a.expr(size)
-		return []expr.Node{expr.NewUnaryOp(n, expr.LoByte)}
+		return []expr.Node{expr.NewUnaryOp(p, n, expr.LoByte)}
 	case scanner.Gt:
 		a.nextToken()
 		n := a.expr(size)
-		return []expr.Node{expr.NewUnaryOp(n, expr.HiByte)}
+		return []expr.Node{expr.NewUnaryOp(p, n, expr.HiByte)}
 	case scanner.String:
 		str := a.lookahead.StrVal
 		a.nextToken()
 		var res []expr.Node
 		for _, c := range str {
-			res = append(res, expr.NewConst(int(c), 1))
+			res = append(res, expr.NewConst(p, int(c), 1))
 		}
 		return res
 	default:
@@ -716,13 +718,15 @@ func containsKey(m map[scanner.TokenType]expr.BinaryOp, key scanner.TokenType) b
 func (a *Assembler) expr(size int) expr.Node {
 	// expr := ["-"] term { "+"|"-"|"|" term } .
 	neg := false
+	var negPos text.Pos
 	if a.lookahead.Type == scanner.Minus {
 		neg = true
+		negPos = a.lookahead.Pos
 		a.nextToken()
 	}
 	node := a.term(size)
 	if neg {
-		node = expr.NewUnaryOp(node, expr.Neg)
+		node = expr.NewUnaryOp(negPos, node, expr.Neg)
 	}
 
 	ops := map[scanner.TokenType]expr.BinaryOp{
@@ -762,30 +766,33 @@ func (a *Assembler) term(size int) expr.Node {
 
 func (a *Assembler) factor(size int) expr.Node {
 	// factor := "~" factor | number | ident | '*'.
-	node := expr.NewConst(0, size)
+	var node expr.Node
 	switch a.lookahead.Type {
 	case scanner.Tilde:
+		p := a.lookahead.Pos
 		a.nextToken()
 		node = a.factor(size)
-		node = expr.NewUnaryOp(node, expr.Not)
+		node = expr.NewUnaryOp(p, node, expr.Not)
 	case scanner.Number:
+		p := a.lookahead.Pos
 		val := a.lookahead.IntVal
 		if !checkSize(size, int(val)) {
-			a.AddError(a.lookahead.Pos, "Constant $%x (decimal %d) is wider than %d bits", val, val, size*8)
+			a.AddError(p, "Constant $%x (decimal %d) is wider than %d bits", val, val, size*8)
 			break
 		}
-		node = expr.NewConst(int(val), size)
+		node = expr.NewConst(p, int(val), size)
 		a.nextToken()
 	case scanner.Ident:
+		p := a.lookahead.Pos
 		sym := a.lookahead.StrVal
 		node = nil
 		if val, found := a.symbols[sym]; found {
 			if val.IsResolved() {
-				node = expr.NewSymbolRef(sym, size, val.Eval())
+				node = expr.NewSymbolRef(p, sym, size, val.Eval())
 			}
 		}
 		if node == nil {
-			node = expr.NewUnresolvedSymbol(sym, size)
+			node = expr.NewUnresolvedSymbol(p, sym, size)
 		}
 		a.nextToken()
 	case scanner.LParen:
@@ -793,11 +800,12 @@ func (a *Assembler) factor(size int) expr.Node {
 		node = a.expr(size)
 		a.match(scanner.RParen)
 	case scanner.Asterisk:
+		p := a.lookahead.Pos
 		if size < 2 {
 			a.AddError(a.lookahead.Pos, "Current PC is 16 bits wide, expected is a %d bit wide value", size*8)
 			break
 		}
-		node = expr.NewConst(a.section.PC(), size)
+		node = expr.NewConst(p, a.section.PC(), size)
 		a.nextToken()
 	}
 	return node
@@ -818,7 +826,7 @@ func (a *Assembler) emit(nodes ...expr.Node) {
 func (a *Assembler) emitNode(n expr.Node) {
 	if a.section == nil {
 		a.AddError(a.scanner.LineStart(), "No .org specified")
-		a.section = NewSection(0)
+		a.section = NewSection(0, a)
 	}
 	var val, size int
 	if !n.IsResolved() {
@@ -831,6 +839,9 @@ func (a *Assembler) emitNode(n expr.Node) {
 		size = n.ResultSize()
 		if n.IsRelative() {
 			val = val - (a.section.PC() + 1)
+			if val < -128 || val > 127 {
+				a.AddError(n.Pos(), "Branch target too far away.")
+			}
 		}
 	}
 	for size > 0 {
@@ -855,7 +866,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 	}
 
 	pc := a.section.PC()
-	a.addSymbol(label, expr.NewConst(pc, 2))
+	a.addSymbol(label, expr.NewConst(pos, pc, 2))
 
 	if !isLocalLabel(label) {
 		a.reportUnresolvedLabels(pos, isLocalLabel)

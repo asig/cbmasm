@@ -18,13 +18,18 @@
  */
 package asm
 
+import (
+	"github.com/asig/cbmasm/pkg/errors"
+)
+
 type Section struct {
-	org   int
-	bytes []byte
+	errorSink errors.Sink
+	org       int
+	bytes     []byte
 }
 
-func NewSection(org int) *Section {
-	return &Section{org: org}
+func NewSection(org int, errorSink errors.Sink) *Section {
+	return &Section{errorSink: errorSink, org: org}
 }
 
 func (section *Section) Emit(b byte) {
@@ -57,6 +62,10 @@ func (section *Section) applyPatch(p patch) {
 	val := p.node.Eval()
 	if p.node.IsRelative() {
 		val = val - (p.pc + 1)
+		if val < -128 || val > 127 {
+			section.errorSink.AddError(p.node.Pos(), "Branch target too far away.")
+		}
+
 	}
 	size := p.node.ResultSize()
 	pos := p.pc - section.org

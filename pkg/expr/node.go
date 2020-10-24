@@ -18,6 +18,10 @@
  */
 package expr
 
+import (
+	"github.com/asig/cbmasm/pkg/text"
+)
+
 type Node interface {
 	ResultSize() int
 	ForceSize(size int) bool
@@ -29,4 +33,6 @@ type Node interface {
 
 	MarkRelative()
 	IsRelative() bool
+
+	Pos() text.Pos
 }

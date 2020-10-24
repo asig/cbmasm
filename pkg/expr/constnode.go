@@ -18,14 +18,20 @@
  */
 package expr
 
+import (
+	"github.com/asig/cbmasm/pkg/text"
+)
+
 type ConstNode struct {
+	pos        text.Pos
 	size       int
 	val        int
 	isRelative bool
 }
 
-func NewConst(val, size int) Node {
+func NewConst(pos text.Pos, val, size int) Node {
 	return &ConstNode{
+		pos:        pos,
 		size:       size,
 		val:        val,
 		isRelative: false,
@@ -65,4 +71,8 @@ func (n *ConstNode) MarkRelative() {
 
 func (n *ConstNode) IsRelative() bool {
 	return n.isRelative
+}
+
+func (n *ConstNode) Pos() text.Pos {
+	return n.pos
 }

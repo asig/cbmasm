@@ -18,7 +18,11 @@
  */
 package expr
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/asig/cbmasm/pkg/text"
+)
 
 type UnaryOp int
 
@@ -30,12 +34,14 @@ const (
 )
 
 type UnaryOpNode struct {
+	pos  text.Pos
 	node Node
 	op   UnaryOp
 }
 
-func NewUnaryOp(node Node, op UnaryOp) Node {
+func NewUnaryOp(pos text.Pos, node Node, op UnaryOp) Node {
 	return &UnaryOpNode{
+		pos:  pos,
 		node: node,
 		op:   op,
 	}
@@ -91,4 +97,8 @@ func (n *UnaryOpNode) MarkRelative() {
 
 func (n *UnaryOpNode) IsRelative() bool {
 	return n.node.IsRelative()
+}
+
+func (n *UnaryOpNode) Pos() text.Pos {
+	return n.pos
 }
