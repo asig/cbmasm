@@ -340,10 +340,10 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Byte:
 		a.nextToken()
 		// handle byte consts
-		nodes := a.dbOp(1)
+		nodes := a.dbOp()
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			n2 := a.dbOp(1)
+			n2 := a.dbOp()
 			nodes = append(nodes, n2...)
 		}
 		a.emit(nodes...)
@@ -360,7 +360,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
 			pos = a.lookahead.Pos
-			vals := a.dbOp(1)
+			vals := a.dbOp()
 			if len(vals) > 1 {
 				a.AddError(pos, "Strings not allowed.")
 			}
@@ -372,11 +372,11 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Word:
 		a.nextToken()
 		// handle wird const
-		nodes := a.dbOp(2)
+		nodes := []expr.Node{a.expr(2)}
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			n2 := a.dbOp(2)
-			nodes = append(nodes, n2...)
+			n2 := a.expr(2)
+			nodes = append(nodes, n2)
 		}
 		a.emit(nodes...)
 	case scanner.Org:
@@ -696,27 +696,56 @@ func (a *Assembler) param() param {
 	}
 }
 
-func (a *Assembler) dbOp(size int) []expr.Node {
+func (a *Assembler) dbOp() []expr.Node {
+	p := a.lookahead.Pos
+	switch {
+	case a.lookahead.Type == scanner.Lt:
+		a.nextToken()
+		n := a.expr(1)
+		return []expr.Node{expr.NewUnaryOp(p, n, expr.LoByte)}
+	case a.lookahead.Type == scanner.Gt:
+		a.nextToken()
+		n := a.expr(1)
+		return []expr.Node{expr.NewUnaryOp(p, n, expr.HiByte)}
+	case a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "scr":
+		// "screen" "(" basicDbOp { "," basicDbOp } ")"
+		a.nextToken()
+		a.match(scanner.LParen)
+		nodes := wrapWithUnaryOp(a.basicDbOp(), expr.ScreenCode)
+		for a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			n2 := wrapWithUnaryOp(a.basicDbOp(), expr.ScreenCode)
+			nodes = append(nodes, n2...)
+		}
+		a.match(scanner.RParen)
+		return nodes
+	default:
+		return a.basicDbOp()
+	}
+}
+
+func wrapWithUnaryOp(nodes []expr.Node, op expr.UnaryOp) []expr.Node {
+	var newNodes []expr.Node
+	for _, n := range nodes {
+		newNodes = append(newNodes, expr.NewUnaryOp(n.Pos(), n, op))
+	}
+	return newNodes
+}
+
+func (a *Assembler) basicDbOp() []expr.Node {
 	p := a.lookahead.Pos
 	switch a.lookahead.Type {
-	case scanner.Lt:
-		a.nextToken()
-		n := a.expr(size)
-		return []expr.Node{expr.NewUnaryOp(p, n, expr.LoByte)}
-	case scanner.Gt:
-		a.nextToken()
-		n := a.expr(size)
-		return []expr.Node{expr.NewUnaryOp(p, n, expr.HiByte)}
 	case scanner.String:
 		str := a.lookahead.StrVal
 		a.nextToken()
 		var res []expr.Node
 		for _, c := range str {
-			res = append(res, expr.NewConst(p, int(c), 1))
+			n := expr.NewConst(p, int(c), 1)
+			res = append(res, expr.NewUnaryOp(p, n, expr.AsciiToPetscii))
 		}
 		return res
 	default:
-		return []expr.Node{a.expr(size)}
+		return []expr.Node{a.expr(1)}
 	}
 }
 

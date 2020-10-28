@@ -19,18 +19,39 @@
 package expr
 
 import (
-	"fmt"
-
 	"github.com/asig/cbmasm/pkg/text"
 )
 
-type UnaryOp int
+type UnaryOp struct {
+	transformation func(int) int
+	size           func(Node) int
+}
 
-const (
-	HiByte UnaryOp = iota
-	LoByte
-	Neg
-	Not
+var (
+	HiByte = UnaryOp{
+		transformation: func(v int) int { return (v >> 8) & 0xff },
+		size:           func(_ Node) int { return 1 },
+	}
+	LoByte = UnaryOp{
+		transformation: func(v int) int { return v & 0xff },
+		size:           func(_ Node) int { return 1 },
+	}
+	Neg = UnaryOp{
+		transformation: func(v int) int { return -v },
+		size:           func(n Node) int { return n.ResultSize() },
+	}
+	Not = UnaryOp{
+		transformation: func(v int) int { return ^v },
+		size:           func(n Node) int { return n.ResultSize() },
+	}
+	ScreenCode = UnaryOp{
+		transformation: func(v int) int { return int(petToScreen[v&0xff]) },
+		size:           func(n Node) int { return 1 },
+	}
+	AsciiToPetscii = UnaryOp{
+		transformation: func(v int) int { return int(ascToPet[v&0xff]) },
+		size:           func(n Node) int { return 1 },
+	}
 )
 
 type UnaryOpNode struct {
@@ -48,13 +69,7 @@ func NewUnaryOp(pos text.Pos, node Node, op UnaryOp) Node {
 }
 
 func (n *UnaryOpNode) ResultSize() int {
-	switch n.op {
-	case Neg:
-		return n.node.ResultSize()
-	case LoByte, HiByte:
-		return 1
-	}
-	panic(fmt.Sprintf("Unimplemented UnaryOp %d", n.op))
+	return n.op.size(n.node)
 }
 
 func (n *UnaryOpNode) ForceSize(size int) bool {
@@ -66,17 +81,7 @@ func (n *UnaryOpNode) Eval() int {
 		panic("Can't evaluate unresolved expr node")
 	}
 	v := n.node.Eval()
-	switch n.op {
-	case Neg:
-		return -v
-	case Not:
-		return ^v
-	case HiByte:
-		return (v >> 8) & 0xff
-	case LoByte:
-		return v & 0xff
-	}
-	panic(fmt.Sprintf("Unimplemented UnaryOp %d", n.op))
+	return n.op.transformation(v)
 }
 
 func (n *UnaryOpNode) IsResolved() bool {
