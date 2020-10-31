@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -37,6 +38,7 @@ var (
 var (
 	flagIncludeDirs = flag.String("I", ".", "include paths")
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
+	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
 )
 
 func usage() {
@@ -110,5 +112,29 @@ func main() {
 	bytes := assembler.GetBytes()
 	outputFile.Write(bytes)
 
+	if *flagDumpLabels {
+		labels := assembler.Labels()
+		names := make([]string, 0, len(labels))
+		maxLen := 0
+		for n := range labels {
+			names = append(names, n)
+			l := len(n)
+			if l > maxLen {
+				maxLen = l
+			}
+		}
+		sort.Strings(names)
+		statusOutput.Println("Labels:")
+		for _, n := range names {
+			val := labels[n]
+			for len(n) < maxLen {
+				n = n + " "
+			}
+			statusOutput.Printf("%s: $%04x\n", n, val)
+		}
+		statusOutput.Println()
+	}
+
 	statusOutput.Printf("%d bytes written to %q.", len(bytes), outputFilename)
+
 }

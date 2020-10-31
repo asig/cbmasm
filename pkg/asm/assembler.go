@@ -43,6 +43,18 @@ type param struct {
 	val     expr.Node
 }
 
+type symbolKind int
+
+const (
+	symbolLabel symbolKind = iota
+	symbolConst
+)
+
+type symbol struct {
+	val  expr.Node
+	kind symbolKind
+}
+
 type state int
 
 const (
@@ -91,7 +103,7 @@ type Assembler struct {
 	patchesPerLabel map[string][]patch
 
 	// Symbol table
-	symbols map[string]expr.Node
+	symbols map[string]symbol
 
 	// Macros
 	macros map[string]*macro
@@ -109,7 +121,7 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.warnings = nil
 	a.section = nil
 	a.patchesPerLabel = make(map[string][]patch)
-	a.symbols = make(map[string]expr.Node)
+	a.symbols = make(map[string]symbol)
 	a.macros = make(map[string]*macro)
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
@@ -122,7 +134,7 @@ func (a *Assembler) Assemble(t text.Text) {
 	if a.state == stateRecordMacro {
 		a.AddError(p, ".endm expected")
 	}
-	a.reportUnresolvedLabels(p, func(string) bool { return true })
+	a.reportUnresolvedSymbols(p, func(string) bool { return true })
 	if a.assemblyEnabled.len() > 1 {
 		a.AddError(p, ".endif expected")
 	}
@@ -412,7 +424,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			return
 		}
 		val := a.expr(2)
-		a.addSymbol(label, val)
+		a.addSymbol(label, symbolConst, val)
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -825,9 +837,9 @@ func (a *Assembler) factor(size int) expr.Node {
 		p := a.lookahead.Pos
 		sym := a.lookahead.StrVal
 		node = nil
-		if val, found := a.symbols[sym]; found {
-			if val.IsResolved() {
-				node = expr.NewSymbolRef(p, sym, size, val.Eval())
+		if s, found := a.symbols[sym]; found {
+			if s.val.IsResolved() {
+				node = expr.NewSymbolRef(p, sym, size, s.val.Eval())
 			}
 		}
 		if node == nil {
@@ -905,18 +917,18 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 	}
 
 	pc := a.section.PC()
-	a.addSymbol(label, expr.NewConst(pos, pc, 2))
+	a.addSymbol(label, symbolLabel, expr.NewConst(pos, pc, 2))
 
 	if !isLocalLabel(label) {
-		a.reportUnresolvedLabels(pos, isLocalLabel)
+		a.reportUnresolvedSymbols(pos, isLocalLabel)
 		a.clearLocalLabels()
 	}
 }
 
 func (a *Assembler) clearLocalLabels() {
-	for symbol := range a.symbols {
-		if isLocalLabel(symbol) {
-			delete(a.symbols, symbol)
+	for name := range a.symbols {
+		if isLocalLabel(name) {
+			delete(a.symbols, name)
 		}
 	}
 	for label := range a.patchesPerLabel {
@@ -926,24 +938,24 @@ func (a *Assembler) clearLocalLabels() {
 	}
 }
 
-func (a *Assembler) reportUnresolvedLabels(errorPos text.Pos, filterFunc func(string) bool) {
+func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(string) bool) {
 	seen := make(map[string]bool)
-	for symbol, node := range a.symbols {
-		if !filterFunc(symbol) {
+	for name, symbol := range a.symbols {
+		if !filterFunc(name) {
 			continue
 		}
-		if !node.IsResolved() {
-			syms := node.UnresolvedSymbols()
+		if !symbol.val.IsResolved() {
+			syms := symbol.val.UnresolvedSymbols()
 			if len(syms) > 0 {
 				var symnames []string
 				for s := range syms {
 					symnames = append(symnames, s)
 				}
 				a.AddError(errorPos, "Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", "))
-				seen[symbol] = true
+				seen[name] = true
 			} else {
 				a.AddError(errorPos, "Undefined label %q", symbol)
-				seen[symbol] = true
+				seen[name] = true
 			}
 		}
 	}
@@ -962,12 +974,12 @@ func isLocalLabel(label string) bool {
 	return strings.HasPrefix(label, "_")
 }
 
-func (a *Assembler) addSymbol(symbol string, val expr.Node) {
-	a.symbols[symbol] = val
+func (a *Assembler) addSymbol(name string, kind symbolKind, val expr.Node) {
+	a.symbols[name] = symbol{val: val, kind: kind}
 	if !val.IsResolved() {
 		return
 	}
-	a.resolveDependencies(symbol, val)
+	a.resolveDependencies(name, val)
 }
 
 func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
@@ -989,14 +1001,13 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 	}
 
 	// Now, resolve any symbols
-	//resolved := map[string]expr.Node {}
-	for name, node := range a.symbols {
-		if node.IsResolved() {
+	for name, sym := range a.symbols {
+		if sym.val.IsResolved() {
 			continue
 		}
-		node.Resolve(symbol, val.Eval())
-		if node.IsResolved() {
-			a.resolveDependencies(name, node)
+		sym.val.Resolve(symbol, val.Eval())
+		if sym.val.IsResolved() {
+			a.resolveDependencies(name, sym.val)
 		}
 	}
 }
@@ -1019,6 +1030,16 @@ func (a *Assembler) AddWarning(pos text.Pos, message string) {
 
 func (a *Assembler) Warnings() []errors.Error {
 	return a.warnings
+}
+
+func (a *Assembler) Labels() map[string]int {
+	res := make(map[string]int)
+	for name, sym := range a.symbols {
+		if sym.kind == symbolLabel {
+			res[name] = sym.val.Eval()
+		}
+	}
+	return res
 }
 
 func (a *Assembler) match(t scanner.TokenType) {
