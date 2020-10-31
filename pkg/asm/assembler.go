@@ -43,18 +43,6 @@ type param struct {
 	val     expr.Node
 }
 
-type symbolKind int
-
-const (
-	symbolLabel symbolKind = iota
-	symbolConst
-)
-
-type symbol struct {
-	val  expr.Node
-	kind symbolKind
-}
-
 type state int
 
 const (
@@ -103,7 +91,7 @@ type Assembler struct {
 	patchesPerLabel map[string][]patch
 
 	// Symbol table
-	symbols map[string]symbol
+	symbols symbolTable
 
 	// Macros
 	macros map[string]*macro
@@ -121,8 +109,7 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.warnings = nil
 	a.section = nil
 	a.patchesPerLabel = make(map[string][]patch)
-	a.symbols = make(map[string]symbol)
-	a.macros = make(map[string]*macro)
+	a.symbols = newSymbolTable()
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
 
@@ -231,6 +218,7 @@ func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 func (a *Assembler) processLine() {
 	t, labelPos, label := a.maybeLabel()
 
+	errs := len(a.Errors())
 	if _, found := conditionalTokens[t.Type]; found {
 		a.maybeAddLabel(labelPos, label)
 		switch t.Type {
@@ -239,7 +227,7 @@ func (a *Assembler) processLine() {
 			a.nextToken()
 			s := a.lookahead.StrVal
 			a.match(scanner.Ident)
-			_, found := a.symbols[s]
+			_, found := a.symbols.get(s)
 			if negate {
 				found = !found
 			}
@@ -278,7 +266,6 @@ func (a *Assembler) processLine() {
 			}
 			a.assemblyEnabled.pop()
 		}
-		a.matchEol()
 	} else {
 		if !a.assemblyEnabled.top() {
 			// conditionally assembly is turned off, ignore this liune
@@ -290,6 +277,9 @@ func (a *Assembler) processLine() {
 		case stateRecordMacro:
 			a.recordMacro()
 		}
+	}
+	if len(a.Errors()) <= errs {
+		// Only match EOL if there were no errors reported.
 		a.matchEol()
 	}
 }
@@ -419,12 +409,12 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Equ:
 		a.nextToken()
 		// label is equ name!
-		if _, found := a.symbols[label]; found {
-			a.AddError(t.Pos, "Symbol %s already exists.", label)
-			return
-		}
+		pos := t.Pos
 		val := a.expr(2)
-		a.addSymbol(label, symbolConst, val)
+		err := a.addSymbol(label, symbolConst, val)
+		if err != nil {
+			a.AddError(pos, err.Error())
+		}
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -441,13 +431,9 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		if _, found := Mnemonics[macroName]; found {
 			a.AddError(labelPos, "Can't use mnemonic %q as macro name", macroName)
 		}
-		if _, found := a.symbols[macroName]; found {
+		if err := a.symbols.add(symbol{name: macroName, kind: symbolMacro, m: a.macro}); err != nil {
 			a.AddError(labelPos, "%q is already defined", macroName)
 		}
-		if _, found := a.macros[macroName]; found {
-			a.AddError(labelPos, "Macro %q already exists", macroName)
-		}
-		a.macros[macroName] = a.macro
 		if a.lookahead.Type != scanner.Eol {
 			a.macroParam()
 			for a.lookahead.Type == scanner.Comma {
@@ -459,10 +445,14 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Endm:
 		a.AddError(t.Pos, ".mend without .macro")
 	case scanner.Ident:
-		op := strings.ToLower(t.StrVal)
+		op := t.StrVal
 		a.nextToken()
-		if m, found := a.macros[op]; found {
-			a.handleMacroInstantiation(m, t.Pos)
+		if sym, found := a.symbols.get(op); found {
+			if sym.kind != symbolMacro {
+				a.AddError(t.Pos, "%q is not a macro", op)
+				return
+			}
+			a.handleMacroInstantiation(sym.m, t.Pos)
 		} else {
 			// must be a mnemonic
 			a.handleMnemonic(t)
@@ -837,7 +827,7 @@ func (a *Assembler) factor(size int) expr.Node {
 		p := a.lookahead.Pos
 		sym := a.lookahead.StrVal
 		node = nil
-		if s, found := a.symbols[sym]; found {
+		if s, found := a.symbols.get(sym); found {
 			if s.val.IsResolved() {
 				node = expr.NewSymbolRef(p, sym, size, s.val.Eval())
 			}
@@ -858,6 +848,9 @@ func (a *Assembler) factor(size int) expr.Node {
 		}
 		node = expr.NewConst(p, a.section.PC(), size)
 		a.nextToken()
+	default:
+		a.AddError(a.lookahead.Pos, "'~', '*', number or identifier expected, found %s", a.lookahead.Type)
+		node = expr.NewConst(a.lookahead.Pos, 0, 1)
 	}
 	return node
 }
@@ -911,13 +904,12 @@ func (a *Assembler) registerPatch(pc int, n expr.Node) {
 }
 
 func (a *Assembler) addLabel(pos text.Pos, label string) {
-	if _, found := a.symbols[label]; found {
-		a.AddError(pos, "Symbol %q already defined.", label)
+	pc := a.section.PC()
+	err := a.addSymbol(label, symbolLabel, expr.NewConst(pos, pc, 2))
+	if err != nil {
+		a.AddError(pos, err.Error())
 		return
 	}
-
-	pc := a.section.PC()
-	a.addSymbol(label, symbolLabel, expr.NewConst(pos, pc, 2))
 
 	if !isLocalLabel(label) {
 		a.reportUnresolvedSymbols(pos, isLocalLabel)
@@ -926,11 +918,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 }
 
 func (a *Assembler) clearLocalLabels() {
-	for name := range a.symbols {
-		if isLocalLabel(name) {
-			delete(a.symbols, name)
-		}
-	}
+	a.symbols.remove(func(sym *symbol) bool { return isLocalLabel(sym.name) })
 	for label := range a.patchesPerLabel {
 		if isLocalLabel(label) {
 			delete(a.patchesPerLabel, label)
@@ -940,8 +928,11 @@ func (a *Assembler) clearLocalLabels() {
 
 func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(string) bool) {
 	seen := make(map[string]bool)
-	for name, symbol := range a.symbols {
-		if !filterFunc(name) {
+	for _, symbol := range a.symbols.symbols() {
+		if !filterFunc(symbol.name) {
+			continue
+		}
+		if symbol.kind == symbolMacro {
 			continue
 		}
 		if !symbol.val.IsResolved() {
@@ -951,11 +942,11 @@ func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(s
 				for s := range syms {
 					symnames = append(symnames, s)
 				}
-				a.AddError(errorPos, "Undefined symbols in definition of %s: %s", symbol, strings.Join(symnames, ", "))
-				seen[name] = true
+				a.AddError(errorPos, "Undefined symbols in definition of %s: %s", symbol.name, strings.Join(symnames, ", "))
+				seen[symbol.name] = true
 			} else {
-				a.AddError(errorPos, "Undefined label %q", symbol)
-				seen[name] = true
+				a.AddError(errorPos, "Undefined label %q", symbol.name)
+				seen[symbol.name] = true
 			}
 		}
 	}
@@ -974,12 +965,15 @@ func isLocalLabel(label string) bool {
 	return strings.HasPrefix(label, "_")
 }
 
-func (a *Assembler) addSymbol(name string, kind symbolKind, val expr.Node) {
-	a.symbols[name] = symbol{val: val, kind: kind}
-	if !val.IsResolved() {
-		return
+func (a *Assembler) addSymbol(name string, kind symbolKind, val expr.Node) error {
+	err := a.symbols.add(symbol{name: name, val: val, kind: kind})
+	if err != nil {
+		return err
 	}
-	a.resolveDependencies(name, val)
+	if val.IsResolved() {
+		a.resolveDependencies(name, val)
+	}
+	return nil
 }
 
 func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
@@ -1001,13 +995,16 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 	}
 
 	// Now, resolve any symbols
-	for name, sym := range a.symbols {
+	for _, sym := range a.symbols.symbols() {
+		if sym.kind == symbolMacro {
+			continue
+		}
 		if sym.val.IsResolved() {
 			continue
 		}
 		sym.val.Resolve(symbol, val.Eval())
 		if sym.val.IsResolved() {
-			a.resolveDependencies(name, sym.val)
+			a.resolveDependencies(sym.name, sym.val)
 		}
 	}
 }
@@ -1034,9 +1031,9 @@ func (a *Assembler) Warnings() []errors.Error {
 
 func (a *Assembler) Labels() map[string]int {
 	res := make(map[string]int)
-	for name, sym := range a.symbols {
+	for _, sym := range a.symbols.symbols() {
 		if sym.kind == symbolLabel {
-			res[name] = sym.val.Eval()
+			res[sym.name] = sym.val.Eval()
 		}
 	}
 	return res
