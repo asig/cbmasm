@@ -37,7 +37,7 @@ op := ".macro" [ident {"," ident }]
     | ".equ" expr
     | ".org" expr
     | ".byte" dbOp {"," dbOp }
-    | ".word" dbOp {"," dbOp }
+    | ".word" expr {"," expr }
     | ".reserve" expr ["," dbOp ] 
     | mnemonic [ param {"," param } ]
     | macroname [ actmacroparam {"," actmacroparam } ]
@@ -51,7 +51,11 @@ actmacroparam := expr .
 
 relOp := ["==" | "!=" | "<=" | "<" | ">=" | >"] .
 
-dbOp := ["<"|">"] expr | string .
+dbOp := ("<"|">") expr 
+      | basicDbOp
+      | "scr" "(" basicDbOp { "," basicDbOp } ")" .
+
+basicDbOp := expr | string
 
 string := '"' { stringChar} '"'.
 
