@@ -54,9 +54,9 @@ func TestMacro_ReplaceParams(t *testing.T) {
 				Lines: []text.Line{{"dummy", 1, []rune(test.text)}},
 			}
 
-			var actuals []param
+			var actuals []string
 			for _, p := range test.paramVals {
-				actuals = append(actuals, param{rawText: p})
+				actuals = append(actuals, p)
 			}
 			got := m.replaceParams(actuals)
 			if len(got) != 1 {
