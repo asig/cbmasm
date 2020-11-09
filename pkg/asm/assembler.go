@@ -133,8 +133,8 @@ func (a *Assembler) resolveIncludes(t text.Text) text.Text {
 		a.beginLine(line)
 
 		t, _, label := a.maybeLabel()
-		if t.Type == scanner.Ident && t.StrVal == "include" {
-			a.match(scanner.Ident)
+		if t.Type == scanner.Include {
+			a.match(scanner.Include)
 			p := a.lookahead.Pos
 			filename := a.lookahead.StrVal
 			a.match(scanner.String)
