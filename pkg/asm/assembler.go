@@ -68,7 +68,11 @@ var relOpToBinOp = map[scanner.TokenType]expr.BinaryOp{
 }
 
 type Assembler struct {
-	includePaths  []string
+	// "Constant" values; not reset before Assemble()
+	includePaths []string
+	defines      []string
+
+	// Reset in Assemble()
 	errorModifier errors.Modifier
 
 	errors      []errors.Error
@@ -104,14 +108,22 @@ func New(includePaths []string) *Assembler {
 	return a
 }
 
+func (a *Assembler) AddDefines(defines []string) {
+	a.defines = defines
+}
+
 func (a *Assembler) Assemble(t text.Text) {
 	a.errors = nil
 	a.warnings = nil
 	a.section = nil
 	a.patchesPerLabel = make(map[string][]patch)
-	a.symbols = newSymbolTable()
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
+
+	a.symbols = newSymbolTable()
+	for _, d := range a.defines {
+		a.addSymbol(d, symbolConst, expr.NewConst(text.Pos{}, 1, 1))
+	}
 
 	t = a.resolveIncludes(t)
 	a.assembleText(t)

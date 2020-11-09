@@ -35,20 +35,55 @@ var (
 	statusOutput = log.New(os.Stdout, "", 0)
 )
 
+type stringArrayFlag []string
+
+func (f *stringArrayFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *stringArrayFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
+}
+
+type pathListFlag []string
+
+func (f *pathListFlag) String() string {
+	return strings.Join(*f, string(os.PathListSeparator))
+}
+
+func (f *pathListFlag) Set(value string) error {
+	for _, p := range strings.Split(value, string(os.PathListSeparator)) {
+		p = strings.TrimSpace(p)
+		if len(p) > 0 {
+			*f = append(*f, p)
+		}
+	}
+	return nil
+}
+
 var (
-	flagIncludeDirs = flag.String("I", ".", "include paths")
+	flagIncludeDirs pathListFlag
+	flagDefines     stringArrayFlag
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
 )
 
 func usage() {
-	errorOutput.Println("Usage: c128asm [inputfile] [outputfile] [-plain]")
+	errorOutput.Println("Usage: c128asm {-I includedir} {-D define} [inputfile] [outputfile] [-plain]")
 	os.Exit(1)
 }
 
 func main() {
+	flag.Var(&flagIncludeDirs, "I", "include paths; can be repeated")
+	flag.Var(&flagDefines, "D", "defined symbols; can be repeated")
 	flag.Parse()
 	args := flag.Args()
+
+	if len(flagIncludeDirs) == 0 {
+		// default to "." if no include dirs are set.
+		flagIncludeDirs = pathListFlag{"."}
+	}
 
 	inputFilename := "<stdin>"
 	outputFilename := "<stdout>"
@@ -85,7 +120,8 @@ func main() {
 
 	t := text.Process(inputFilename, string(raw))
 
-	assembler := asm.New(strings.Split(*flagIncludeDirs, ":"))
+	assembler := asm.New(flagIncludeDirs)
+	assembler.AddDefines(flagDefines)
 	assembler.Assemble(t)
 	errors := assembler.Errors()
 	if len(errors) > 0 {
