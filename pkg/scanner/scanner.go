@@ -34,6 +34,7 @@ const (
 	Ident
 	Number
 	String
+	Char
 	LParen
 	RParen
 	Plus
@@ -101,6 +102,7 @@ var tokenTypeToString = map[TokenType]string{
 	Ident:     "identifier",
 	Number:    "number",
 	String:    "string",
+	Char:      "character",
 	LParen:    "'('",
 	RParen:    "')'",
 	Plus:      "'+'",
@@ -260,35 +262,15 @@ func (scanner *Scanner) Scan() Token {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 	case ch == '"':
-		t.StrVal = ""
-		ch = scanner.getch()
-		for ch != '"' {
-			p := scanner.CurPos()
-			switch ch {
-			case '\\':
-				ch = scanner.getch()
-				switch ch {
-				case '\\', '"':
-					t.StrVal = t.StrVal + string(ch)
-				case 'n':
-					t.StrVal = t.StrVal + "\n"
-				case 't':
-					t.StrVal = t.StrVal + "\t"
-				case 'b':
-					t.StrVal = t.StrVal + "\b"
-				default:
-					scanner.ungetch()
-					scanner.errorSink.AddError(p, "Unknown escape sequence")
-				}
-			case '\n':
-				scanner.errorSink.AddError(p, "Unterminated string")
-				break
-			default:
-				t.StrVal = t.StrVal + string(ch)
-			}
-			ch = scanner.getch()
-		}
+		t.StrVal = scanner.readString(ch)
 		t.Type = String
+	case ch == '\'':
+		pos := scanner.CurPos()
+		t.StrVal = scanner.readString(ch)
+		if len(t.StrVal) != 1 {
+			scanner.errorSink.AddError(pos, "invalid character constant")
+		}
+		t.Type = Char
 	case ch == '&':
 		t.StrVal = "&"
 		ch = scanner.getch()
@@ -383,6 +365,38 @@ func (scanner *Scanner) Scan() Token {
 		t.Type = Caret
 	}
 	return t
+}
+
+func (scanner *Scanner) readString(separator rune) string {
+	s := ""
+	ch := scanner.getch()
+	for ch != separator {
+		p := scanner.CurPos()
+		switch ch {
+		case '\\':
+			ch = scanner.getch()
+			switch ch {
+			case '\\', '"':
+				s = s + string(ch)
+			case 'n':
+				s = s + "\n"
+			case 't':
+				s = s + "\t"
+			case 'b':
+				s = s + "\b"
+			default:
+				scanner.ungetch()
+				scanner.errorSink.AddError(p, "Unknown escape sequence")
+			}
+		case '\n':
+			scanner.errorSink.AddError(p, "Unterminated string")
+			break
+		default:
+			s = s + string(ch)
+		}
+		ch = scanner.getch()
+	}
+	return s
 }
 
 func (scanner *Scanner) readNumber(ch rune, base int, pred func(rune) bool) (int64, string, error) {

@@ -821,7 +821,7 @@ func (a *Assembler) term(size int) expr.Node {
 }
 
 func (a *Assembler) factor(size int) expr.Node {
-	// factor := "~" factor | number | ident | '*'.
+	// factor := "~" factor | number | char-const | ident | '*'.
 	var node expr.Node
 	switch a.lookahead.Type {
 	case scanner.Tilde:
@@ -837,6 +837,11 @@ func (a *Assembler) factor(size int) expr.Node {
 			break
 		}
 		node = expr.NewConst(p, int(val), size)
+		a.nextToken()
+	case scanner.Char:
+		p := a.lookahead.Pos
+		val := a.lookahead.StrVal
+		node = expr.NewUnaryOp(p, expr.NewConst(p, int(val[0]), size), expr.AsciiToPetscii)
 		a.nextToken()
 	case scanner.Ident:
 		p := a.lookahead.Pos

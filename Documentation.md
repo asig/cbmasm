@@ -74,6 +74,7 @@ expr := ["-"] term { "+"|"-"|"|" term } .
 term := factor { "*"|"/"|"%"|"&"|"^" factor } . 
 factor := "~" factor 
         | number 
+        | char-const
         | ident 
         | '*'
         | "(" expr ")" .

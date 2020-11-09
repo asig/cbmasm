@@ -203,6 +203,14 @@ foo .equ 1
 `,
 			want: []byte{0x01, 0x02, 0x03, 0x04, 0x09, 0x0a, 0x0b, 0x0c},
 		},
+
+		{
+			name: "char constants",
+			text: `   .org 0
+	lda #'a'
+`,
+			want: []byte{0xa9, 0x41},
+		},
 	}
 
 	for _, test := range tests {
