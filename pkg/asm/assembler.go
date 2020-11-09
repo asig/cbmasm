@@ -96,9 +96,6 @@ type Assembler struct {
 
 	// Symbol table
 	symbols symbolTable
-
-	// Macros
-	macros map[string]*macro
 }
 
 func New(includePaths []string) *Assembler {
