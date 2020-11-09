@@ -573,9 +573,15 @@ func (a *Assembler) findIncludeFile(f string) *string {
 }
 
 func (a *Assembler) actMacroParam() string {
-	// param := expr .
+	// actmacroparam := ["#" ["<"|">"]] expr .
 
 	startPos := a.lookahead.Pos
+	if a.lookahead.Type == scanner.Hash {
+		a.nextToken()
+		if a.lookahead.Type == scanner.Lt || a.lookahead.Type == scanner.Gt {
+			a.nextToken()
+		}
+	}
 	a.expr(2)
 	endPos := a.lookahead.Pos
 	return strings.TrimSpace(a.scanner.Line().Extract(startPos, endPos))
@@ -686,7 +692,7 @@ func (a *Assembler) param() param {
 			a.nextToken()
 			s := a.lookahead.StrVal
 			pos := a.lookahead.Pos
-			a.match(scanner.String)
+			a.match(scanner.Ident)
 			if strings.ToLower(s) != "x" && strings.ToLower(s) != "y" {
 				a.AddError(pos, "Expected 'X' or 'Y', but got %s.", s)
 				s = "x"

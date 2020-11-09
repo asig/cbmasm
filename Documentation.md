@@ -47,7 +47,7 @@ mnemonic := ident .
 
 macroname := ident .
                     
-actmacroparam := expr .
+actmacroparam := ["#" ["<"|">"]] expr .
 
 relOp := ["==" | "!=" | "<=" | "<" | ">=" | >"] .
 
