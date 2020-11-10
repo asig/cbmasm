@@ -47,7 +47,7 @@ func TestMacro_ReplaceParams(t *testing.T) {
 			for _, p := range test.paramNames {
 				err := m.addParam(p)
 				if err != nil {
-					t.Errorf("Unexpected error while adding param: %s", err)
+					t.Errorf("Unexpected error while adding mos6502Param: %s", err)
 				}
 			}
 			m.text = &text.Text{

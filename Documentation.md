@@ -38,7 +38,8 @@ op := ".macro" [ident {"," ident }]
     | ".org" expr
     | ".byte" dbOp {"," dbOp }
     | ".word" expr {"," expr }
-    | ".reserve" expr ["," dbOp ] 
+    | ".reserve" expr ["," dbOp ]
+    | ".cpu" string 
     | mnemonic [ param {"," param } ]
     | macroname [ actmacroparam {"," actmacroparam } ]
 .
@@ -59,8 +60,9 @@ basicDbOp := expr | string
 
 string := '"' { stringChar} '"'.
 
+6502 mode:
 param := "#" ["<"|">"] expr
-       | expr``
+       | expr
        | expr "," "X"
        | expr "," "Y"  
        | "(" expr ")"
@@ -69,6 +71,12 @@ param := "#" ["<"|">"] expr
        | "(" expr ") ""," "X" 
        | "(" expr ")" "," "Y"       
 
+z80 mode:
+param := ["<"|">"] expr
+       | register
+       | "(" double-register ")"
+       | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
+       | expr
 
 expr := ["-"] term { "+"|"-"|"|" term } .
 term := factor { "*"|"/"|"%"|"&"|"^" factor } . 

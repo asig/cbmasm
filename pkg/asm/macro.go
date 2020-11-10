@@ -83,7 +83,7 @@ func substituteParams(line text.Line, paramMap map[string]string) []rune {
 	t := s.Scan()
 	for t.Type != scanner.Eol {
 		if t.Type == scanner.Ident {
-			// Potentially a param
+			// Potentially a mos6502Param
 			if val, found := paramMap[t.StrVal]; found {
 				// YES. Insert replacement at the beginning
 				repls = append([]replacement{{t.Pos.Col - 1, len(t.StrVal), val}}, repls...)

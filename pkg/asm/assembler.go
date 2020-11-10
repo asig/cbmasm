@@ -25,6 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/asig/cbmasm/pkg/asm/mos6502"
+	"github.com/asig/cbmasm/pkg/asm/z80"
 	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/expr"
 	"github.com/asig/cbmasm/pkg/scanner"
@@ -37,9 +39,8 @@ type patch struct {
 	node expr.Node // Node that needs to be patched in
 }
 
-type param struct {
-	rawText string // Only used in macro calls
-	mode    AddressingMode
+type mos6502Param struct {
+	mode    mos6502.AddressingMode
 	val     expr.Node
 }
 
@@ -437,7 +438,10 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			pos:  t.Pos,
 			text: &text.Text{},
 		}
-		if _, found := Mnemonics[macroName]; found {
+		mn := strings.ToLower(macroName)
+		_, found6502 := mos6502.Mnemonics[mn]
+		_, foundZ80 := z80.Mnemonics[mn]
+		if found6502 || foundZ80 {
 			a.AddError(labelPos, "Can't use mnemonic %q as macro name", macroName)
 		}
 		if err := a.symbols.add(symbol{name: macroName, kind: symbolMacro, m: a.macro}); err != nil {
@@ -517,22 +521,58 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 }
 
 func (a *Assembler) handleMnemonic(t scanner.Token) {
+	// TODO call 6502 and Z80 handler
+	a.handle6502Mnemonic(t)
+}
+
+func (a *Assembler) handleZ80Mnemonic(t scanner.Token) {
+	pos := t.Pos
+	op := strings.ToLower(t.StrVal)
+	// must be a mnemonic
+	opEntries, found := z80.Mnemonics[op]
+	if !found {
+		a.AddError(pos, fmt.Sprintf("%s is not a valid mnemonic", t.StrVal))
+		return
+	}
+
+	var params []z80.Param
+
+	// Read parames
+	if a.lookahead.Type != scanner.Semicolon && a.lookahead.Type != scanner.Eol {
+		params = append(params, a.z80Param())
+		if a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			params = append(params, a.z80Param())
+		}
+	}
+
+	cg := opEntries.FindMatch(params)
+	if cg == nil {
+		a.AddError(pos, fmt.Sprintf("Bad parameters for %s", t.StrVal))
+		return
+	}
+	for _, n := range cg(params, a) {
+		a.emitNode(n)
+	}
+}
+
+func (a *Assembler) handle6502Mnemonic(t scanner.Token) {
 	op := strings.ToLower(t.StrVal)
 
 	// must be a mnemonic
-	opCodes, found := Mnemonics[op]
+	opCodes, found := mos6502.Mnemonics[op]
 	if !found {
 		a.AddError(t.Pos, fmt.Sprintf("%s is not a valid mnemonic", t.StrVal))
 		return
 	}
-	param := a.param()
+	param := a.mos6502Param()
 	opCode, found := opCodes[param.mode]
-	if !found && param.mode == AM_Absolute {
+	if !found && param.mode == mos6502.AM_Absolute {
 		// Maybe it's a relative branch? let's check
-		opCode, found = opCodes[AM_Relative]
+		opCode, found = opCodes[mos6502.AM_Relative]
 		if found {
 			// Yes, it is! Switch to relative addressing
-			param.mode = AM_Relative
+			param.mode = mos6502.AM_Relative
 			param.val.MarkRelative()
 		}
 	}
@@ -596,8 +636,8 @@ func (a *Assembler) actMacroParam() string {
 	return strings.TrimSpace(a.scanner.Line().Extract(startPos, endPos))
 }
 
-func (a *Assembler) param() param {
-	// param := "#" ["<"|">"] expr
+func (a *Assembler) mos6502Param() mos6502Param {
+	// mos6502Param := "#" ["<"|">"] expr
 	//       | expr
 	//       | expr "," "X"
 	//       | expr "," "Y"
@@ -607,16 +647,14 @@ func (a *Assembler) param() param {
 	//       | "(" expr ") ""," "X"
 	//       | "(" expr ")" "," "Y"
 
-	startPos := a.lookahead.Pos
-
 	if a.lookahead.Type == scanner.Semicolon || a.lookahead.Type == scanner.Eol {
-		// No param, implied addressing mode'
-		return param{rawText: "", mode: AM_Implied}
+		// No mos6502Param, implied addressing mode'
+		return mos6502Param{mode: mos6502.AM_Implied}
 	}
 
 	switch a.lookahead.Type {
 	case scanner.Hash:
-		am := AM_Immediate
+		am := mos6502.AM_Immediate
 		var node expr.Node
 		a.nextToken()
 		p := a.lookahead.Pos
@@ -630,15 +668,14 @@ func (a *Assembler) param() param {
 		default:
 			node = a.expr(1)
 		}
-		endPos := a.lookahead.Pos
-		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+		return mos6502Param{mode: am, val: node}
 	case scanner.LParen:
 		// AM_AbsoluteIndirect // ($aaaa)
 		// AM_IndexedIndirect  // ($aa,X)
 		// AM_IndirectIndexed  // ($aa),Y
 		a.nextToken()
 		node := a.expr(2)
-		am := AM_AbsoluteIndirect
+		am := mos6502.AM_AbsoluteIndirect
 
 		if a.lookahead.Type == scanner.Comma {
 			// AM_IndexedIndirect  // ($aa,X)
@@ -658,10 +695,9 @@ func (a *Assembler) param() param {
 			if strings.ToLower(reg) != "x" {
 				a.AddError(pos, "Register X expected, found %s.", reg)
 			}
-			am = AM_IndexedIndirect
+			am = mos6502.AM_IndexedIndirect
 			a.match(scanner.RParen)
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+			return mos6502Param{mode: am, val: node}
 		} else {
 			a.match(scanner.RParen)
 			if a.lookahead.Type == scanner.Comma {
@@ -682,21 +718,19 @@ func (a *Assembler) param() param {
 				if strings.ToLower(reg) != "y" {
 					a.AddError(pos, "Register Y expected, found %s.", reg)
 				}
-				am = AM_IndirectIndexed
+				am = mos6502.AM_IndirectIndexed
 			}
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+			return mos6502Param{mode: am, val: node}
 		}
 
 	default:
 		if a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "a" {
 			a.nextToken()
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: AM_Accumulator, val: nil}
+			return mos6502Param{mode: mos6502.AM_Accumulator, val: nil}
 		}
-		am := AM_Absolute
+		am := mos6502.AM_Absolute
 		node := a.expr(2)
-		am = am.withSize(node.ResultSize())
+		am = am.WithSize(node.ResultSize())
 		if a.lookahead.Type == scanner.Comma {
 			a.nextToken()
 			s := a.lookahead.StrVal
@@ -706,11 +740,14 @@ func (a *Assembler) param() param {
 				a.AddError(pos, "Expected 'X' or 'Y', but got %s.", s)
 				s = "x"
 			}
-			am = am.withIndex(s)
+			am = am.WithIndex(s)
 		}
-		endPos := a.lookahead.Pos
-		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+		return mos6502Param{mode: am, val: node}
 	}
+}
+
+func (a *Assembler) z80Param() z80.Param {
+	return z80.Param{}
 }
 
 func (a *Assembler) dbOp() []expr.Node {

@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with cbmasm.  If not, see <http://www.gnu.org/licenses/>.
  */
-package asm
+package mos6502
 
 type AddressingMode int
 
@@ -36,7 +36,7 @@ const (
 	AM_Relative         // $aa
 )
 
-func (am AddressingMode) withIndex(register string) AddressingMode {
+func (am AddressingMode) WithIndex(register string) AddressingMode {
 	switch am {
 	case AM_Absolute:
 		switch register {
@@ -56,7 +56,7 @@ func (am AddressingMode) withIndex(register string) AddressingMode {
 	return am
 }
 
-func (am AddressingMode) withSize(size int) AddressingMode {
+func (am AddressingMode) WithSize(size int) AddressingMode {
 	switch am {
 	case AM_ZeroPage:
 		if size == 2 {
