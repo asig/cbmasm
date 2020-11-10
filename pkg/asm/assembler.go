@@ -38,9 +38,8 @@ type patch struct {
 }
 
 type param struct {
-	rawText string // Only used in macro calls
-	mode    AddressingMode
-	val     expr.Node
+	mode AddressingMode
+	val  expr.Node
 }
 
 type state int
@@ -607,11 +606,9 @@ func (a *Assembler) param() param {
 	//       | "(" expr ") ""," "X"
 	//       | "(" expr ")" "," "Y"
 
-	startPos := a.lookahead.Pos
-
 	if a.lookahead.Type == scanner.Semicolon || a.lookahead.Type == scanner.Eol {
 		// No param, implied addressing mode'
-		return param{rawText: "", mode: AM_Implied}
+		return param{mode: AM_Implied}
 	}
 
 	switch a.lookahead.Type {
@@ -630,8 +627,7 @@ func (a *Assembler) param() param {
 		default:
 			node = a.expr(1)
 		}
-		endPos := a.lookahead.Pos
-		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+		return param{mode: am, val: node}
 	case scanner.LParen:
 		// AM_AbsoluteIndirect // ($aaaa)
 		// AM_IndexedIndirect  // ($aa,X)
@@ -660,8 +656,7 @@ func (a *Assembler) param() param {
 			}
 			am = AM_IndexedIndirect
 			a.match(scanner.RParen)
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+			return param{mode: am, val: node}
 		} else {
 			a.match(scanner.RParen)
 			if a.lookahead.Type == scanner.Comma {
@@ -684,15 +679,13 @@ func (a *Assembler) param() param {
 				}
 				am = AM_IndirectIndexed
 			}
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+			return param{mode: am, val: node}
 		}
 
 	default:
 		if a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "a" {
 			a.nextToken()
-			endPos := a.lookahead.Pos
-			return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: AM_Accumulator, val: nil}
+			return param{mode: AM_Accumulator, val: nil}
 		}
 		am := AM_Absolute
 		node := a.expr(2)
@@ -708,8 +701,7 @@ func (a *Assembler) param() param {
 			}
 			am = am.withIndex(s)
 		}
-		endPos := a.lookahead.Pos
-		return param{rawText: a.scanner.Line().Extract(startPos, endPos), mode: am, val: node}
+		return param{mode: am, val: node}
 	}
 }
 
