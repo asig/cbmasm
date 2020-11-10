@@ -648,7 +648,7 @@ func (a *Assembler) mos6502Param() mos6502Param {
 	//       | "(" expr ")" "," "Y"
 
 	if a.lookahead.Type == scanner.Semicolon || a.lookahead.Type == scanner.Eol {
-		// No mos6502Param, implied addressing mode'
+		// No param, implied addressing mode'
 		return mos6502Param{mode: mos6502.AM_Implied}
 	}
 
