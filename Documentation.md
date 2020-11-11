@@ -74,6 +74,7 @@ param := "#" ["<"|">"] expr
 z80 mode:
 param := ["<"|">"] expr
        | register
+       | cond
        | "(" double-register ")"
        | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
        | expr

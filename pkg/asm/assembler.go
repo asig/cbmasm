@@ -40,8 +40,8 @@ type patch struct {
 }
 
 type mos6502Param struct {
-	mode    mos6502.AddressingMode
-	val     expr.Node
+	mode mos6502.AddressingMode
+	val  expr.Node
 }
 
 type state int
@@ -747,7 +747,64 @@ func (a *Assembler) mos6502Param() mos6502Param {
 }
 
 func (a *Assembler) z80Param() z80.Param {
-	return z80.Param{}
+	// param := ["<"|">"] expr
+	//        | register
+	//        | cond
+	//        | "(" double-register ")"
+	//        | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
+	//        | expr
+
+	p := a.lookahead.Pos
+	switch a.lookahead.Type {
+	case scanner.Lt, scanner.Gt:
+		op := expr.LoByte
+		if a.lookahead.Type == scanner.Gt {
+			op = expr.HiByte
+		}
+		a.nextToken()
+		node := expr.NewUnaryOp(p, a.expr(2), op)
+		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
+
+	case scanner.Ident:
+		if reg, found := z80.RegisterFromString(a.lookahead.StrVal); found {
+			return z80.Param{Pos: p, Mode: z80.AM_Register, R: reg}
+		}
+		if cond, found := z80.CondFromString(a.lookahead.StrVal); found {
+			return z80.Param{Pos: p, Mode: z80.AM_Cond, Cond: cond}
+		}
+		// Neither reg nor cond, must be expression
+		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: a.expr(2)}
+	case scanner.LParen:
+		// RegisterIndirect, Indexed, or expr
+		a.nextToken()
+		if a.lookahead.Type == scanner.Ident {
+			if reg, ok := z80.RegisterFromString(a.lookahead.StrVal); ok {
+				param := z80.Param{Pos: p, Mode: z80.AM_RegisterIndirect, R: reg}
+				a.nextToken()
+				if a.lookahead.Type == scanner.Plus || a.lookahead.Type == scanner.Minus {
+					// Indexed
+					param.Mode = z80.AM_Indexed
+					neg := a.lookahead.Type == scanner.Minus
+					negPos := a.lookahead.Pos
+					a.nextToken()
+					node := a.expr(1)
+					if neg {
+						node = expr.NewUnaryOp(negPos, node, expr.Neg)
+					}
+					param.Val = node
+				}
+				a.match(scanner.RParen)
+				return param
+			}
+		}
+		// must be expr()
+		node := a.expr(2)
+		a.match(scanner.RParen)
+		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
+	default:
+		node := a.expr(2)
+		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
+	}
 }
 
 func (a *Assembler) dbOp() []expr.Node {
