@@ -77,6 +77,7 @@ param := ["<"|">"] expr
        | cond
        | "(" double-register ")"
        | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
+       | "(" expr ")"
        | expr
 
 expr := ["-"] term { "+"|"-"|"|" term } .

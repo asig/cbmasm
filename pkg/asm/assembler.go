@@ -764,6 +764,7 @@ func (a *Assembler) z80Param() z80.Param {
 	//        | cond
 	//        | "(" double-register ")"
 	//        | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
+	//        | "(" expr ")"
 	//        | expr
 
 	p := a.lookahead.Pos
@@ -779,15 +780,17 @@ func (a *Assembler) z80Param() z80.Param {
 
 	case scanner.Ident:
 		if reg, found := z80.RegisterFromString(a.lookahead.StrVal); found {
+			a.nextToken()
 			return z80.Param{Pos: p, Mode: z80.AM_Register, R: reg}
 		}
 		if cond, found := z80.CondFromString(a.lookahead.StrVal); found {
+			a.nextToken()
 			return z80.Param{Pos: p, Mode: z80.AM_Cond, Cond: cond}
 		}
 		// Neither reg nor cond, must be expression
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: a.expr(2)}
 	case scanner.LParen:
-		// RegisterIndirect, Indexed, or expr
+		// RegisterIndirect, Indexed, or ExtAddressing
 		a.nextToken()
 		if a.lookahead.Type == scanner.Ident {
 			if reg, ok := z80.RegisterFromString(a.lookahead.StrVal); ok {
@@ -812,7 +815,7 @@ func (a *Assembler) z80Param() z80.Param {
 		// must be expr()
 		node := a.expr(2)
 		a.match(scanner.RParen)
-		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
+		return z80.Param{Pos: p, Mode: z80.AM_ExtAddressing, Val: node}
 	default:
 		node := a.expr(2)
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
