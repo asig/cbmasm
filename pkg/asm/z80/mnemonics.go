@@ -45,6 +45,24 @@ const (
 	Reg_R
 )
 
+var (
+	drVal = map[Register]int{
+		Reg_BC: 0,
+		Reg_DE: 1,
+		Reg_HL: 2,
+		Reg_SP: 3,
+	}
+	rVal = map[Register]int{
+		Reg_B: 0b000,
+		Reg_C: 0b001,
+		Reg_D: 0b010,
+		Reg_E: 0b011,
+		Reg_H: 0b100,
+		Reg_L: 0b101,
+		Reg_A: 0b111,
+	}
+)
+
 func (r Register) IsDouble() bool {
 	switch r {
 	case Reg_AF, Reg_BC, Reg_DE, Reg_HL, Reg_SP:
@@ -178,6 +196,52 @@ func (l OpCodeEntryList) FindMatch(p []Param) CodeGen {
 	return nil
 }
 
+func c(v int) expr.Node {
+	return expr.NewConst(text.Pos{}, v, 1)
+}
+
+func loByte(p Param) expr.Node {
+	return expr.NewUnaryOp(p.Pos, p.Val, expr.LoByte)
+}
+
+func hiByte(p Param) expr.Node {
+	return expr.NewUnaryOp(p.Pos, p.Val, expr.HiByte)
+}
+
 var Mnemonics = map[string]OpCodeEntryList{
-	"ld": {},
+	"ld": {
+		OpCodeEntry{ // LD dd, (nn)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}, {mode: AM_ExtAddressing}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0b01001011 | drVal[p[0].R]<<4), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+
+		OpCodeEntry{ // LD dd, nn
+			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00000011 | drVal[p[0].R]<<4), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD r, n
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00000110 | rVal[p[0].R]<<3), p[1].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // LD r, r'
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b01000000 | rVal[p[0].R]<<3 | rVal[p[1].R]),
+				}
+			},
+		},
+	},
 }
