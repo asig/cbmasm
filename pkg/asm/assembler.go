@@ -68,20 +68,23 @@ var relOpToBinOp = map[scanner.TokenType]expr.BinaryOp{
 	scanner.Ge: expr.Ge,
 }
 
+type mnemonicHandler func(a *Assembler, t scanner.Token)
+
 type Assembler struct {
 	// "Constant" values; not reset before Assemble()
 	includePaths []string
 	defines      []string
 
-	// Reset in Assemble()
-	errorModifier errors.Modifier
+	// All following fields are reset in Assemble()
 
-	errors      []errors.Error
-	warnings    []errors.Error
-	scanner     *scanner.Scanner
-	lookahead   scanner.Token
-	tokenBuf    scanner.Token
-	tokenBufSet bool
+	errorModifier   errors.Modifier
+	mnemonicHandler mnemonicHandler
+	errors          []errors.Error
+	warnings        []errors.Error
+	scanner         *scanner.Scanner
+	lookahead       scanner.Token
+	tokenBuf        scanner.Token
+	tokenBufSet     bool
 
 	assemblyEnabled stack
 	state           state
@@ -117,6 +120,7 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.patchesPerLabel = make(map[string][]patch)
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
+	a.mnemonicHandler = handle6502Mnemonic
 
 	a.symbols = newSymbolTable()
 	for _, d := range a.defines {
@@ -425,6 +429,19 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		if err != nil {
 			a.AddError(pos, err.Error())
 		}
+	case scanner.Cpu:
+		a.nextToken()
+		cpu := a.lookahead.StrVal
+		pos := a.lookahead.Pos
+		a.match(scanner.String)
+		switch strings.ToLower(cpu) {
+		case "6502":
+			a.mnemonicHandler = handle6502Mnemonic
+		case "z80":
+			a.mnemonicHandler = handleZ80Mnemonic
+		default:
+			a.AddError(pos, "Unknown CPU %q", cpu)
+		}
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -468,7 +485,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			a.handleMacroInstantiation(sym.m, t.Pos)
 		} else {
 			// must be a mnemonic
-			a.handleMnemonic(t)
+			a.mnemonicHandler(a, t)
 		}
 	default:
 		a.AddError(t.Pos, "Identifier or directive expected")
@@ -520,12 +537,7 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 	a.errorModifier = savedErrorModifier
 }
 
-func (a *Assembler) handleMnemonic(t scanner.Token) {
-	// TODO call 6502 and Z80 handler
-	a.handle6502Mnemonic(t)
-}
-
-func (a *Assembler) handleZ80Mnemonic(t scanner.Token) {
+func handleZ80Mnemonic(a *Assembler, t scanner.Token) {
 	pos := t.Pos
 	op := strings.ToLower(t.StrVal)
 	// must be a mnemonic
@@ -556,7 +568,7 @@ func (a *Assembler) handleZ80Mnemonic(t scanner.Token) {
 	}
 }
 
-func (a *Assembler) handle6502Mnemonic(t scanner.Token) {
+func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 	op := strings.ToLower(t.StrVal)
 
 	// must be a mnemonic

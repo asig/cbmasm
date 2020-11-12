@@ -60,6 +60,7 @@ const (
 	Caret
 
 	// directives
+	Cpu
 	Ifdef
 	Ifndef
 	If
@@ -80,6 +81,7 @@ const (
 )
 
 var identToTokenType = map[string]TokenType{
+	".cpu":     Cpu,
 	".ifdef":   Ifdef,
 	".ifndef":  Ifndef,
 	".if":      If,
