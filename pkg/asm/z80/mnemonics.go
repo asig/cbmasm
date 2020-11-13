@@ -43,6 +43,8 @@ const (
 	Reg_SP
 	Reg_I
 	Reg_R
+	Reg_IX
+	Reg_IY
 )
 
 var (
@@ -87,6 +89,8 @@ var (
 		"sp": Reg_SP,
 		"i":  Reg_I,
 		"r":  Reg_R,
+		"ix": Reg_IX,
+		"iy": Reg_IY,
 	}
 )
 
@@ -208,17 +212,31 @@ func hiByte(p Param) expr.Node {
 	return expr.NewUnaryOp(p.Pos, p.Val, expr.HiByte)
 }
 
+func bytes(bs ...int) OpCodeEntryList {
+	var nodes []expr.Node
+	for _, b := range bs {
+		nodes = append(nodes, c(b))
+	}
+	return OpCodeEntryList{
+		OpCodeEntry{
+			[]ParamPattern{},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return nodes
+			},
+		},
+	}
+}
+
 var Mnemonics = map[string]OpCodeEntryList{
 	"ld": {
 		OpCodeEntry{ // LD dd, (nn)
-			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}, {mode: AM_ExtAddressing}},
+			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_SP}, {mode: AM_ExtAddressing}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
 					c(0xed), c(0b01001011 | drVal[p[0].R]<<4), loByte(p[1]), hiByte(p[1]),
 				}
 			},
 		},
-
 		OpCodeEntry{ // LD dd, nn
 			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}, {mode: AM_Immediate}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
@@ -243,5 +261,237 @@ var Mnemonics = map[string]OpCodeEntryList{
 				}
 			},
 		},
+		OpCodeEntry{ // LD (BC),A
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_BC}, {mode: AM_Register, regs: Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x02)}
+			},
+		},
+		OpCodeEntry{ // LD (DE),A
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_DE}, {mode: AM_Register, regs: Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x12)}
+			},
+		},
+		OpCodeEntry{ // LD (HL), n
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x36), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // LD (HL), r
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0b01110000 | rVal[p[1].R])}
+			},
+		},
+		OpCodeEntry{ // LD r, (IX + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xdd), c(0b01000110 | rVal[p[0].R<<3]), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // LD r, (IY + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xfd), c(0b01000110 | rVal[p[0].R<<3]), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // LD (IX + d), n
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xdd), c(0x36), p[0].Val, p[1].Val}
+			},
+		},
+		OpCodeEntry{ // LD (IY + d), n
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xfd), c(0x36), p[0].Val, p[1].Val}
+			},
+		},
+		OpCodeEntry{ // LD (IX + d), r
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xdd), c(0b01110000 | rVal[p[1].R]), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // LD (IY + d), r
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xfd), c(0b01110000 | rVal[p[1].R]), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // LD A, (nn)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_ExtAddressing}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x3a), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD (nn), A
+			[]ParamPattern{{mode: AM_ExtAddressing}, {mode: AM_Register, regs: Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x32), loByte(p[0]), hiByte(p[0]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD (nn), dd
+			[]ParamPattern{{mode: AM_ExtAddressing}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0b01000011 | drVal[p[1].R]<<4), loByte(p[0]), hiByte(p[0]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD (nn), HL
+			[]ParamPattern{{mode: AM_ExtAddressing}, {mode: AM_Register, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x22), loByte(p[0]), hiByte(p[0]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD (nn), IX
+			[]ParamPattern{{mode: AM_ExtAddressing}, {mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0x22), loByte(p[0]), hiByte(p[0]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD (nn), IY
+			[]ParamPattern{{mode: AM_ExtAddressing}, {mode: AM_Register, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0x22), loByte(p[0]), hiByte(p[0]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD A, (BC)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_BC}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x0a),
+				}
+			},
+		},
+		OpCodeEntry{ // LD A, (DE)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_DE}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x1a),
+				}
+			},
+		},
+		OpCodeEntry{ // LD A, I
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Register, regs: Reg_I}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0x57),
+				}
+			},
+		},
+		OpCodeEntry{ // LD I, A
+			[]ParamPattern{{mode: AM_Register, regs: Reg_I}, {mode: AM_Register, regs: Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0x47),
+				}
+			},
+		},
+		OpCodeEntry{ // LD A, R
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Register, regs: Reg_R}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0x5f),
+				}
+			},
+		},
+		OpCodeEntry{ // LD HL, (nn)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_HL}, {mode: AM_ExtAddressing}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x2a), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD IX, nn
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0x21), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD IX, (nn)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}, {mode: AM_ExtAddressing}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0x2a), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD IY, nn
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IY}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0x21), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD IY, (nn)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IY}, {mode: AM_ExtAddressing}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0x2a), loByte(p[1]), hiByte(p[1]),
+				}
+			},
+		},
+		OpCodeEntry{ // LD R, A
+			[]ParamPattern{{mode: AM_Register, regs: Reg_R}, {mode: AM_Register, regs: Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0x4f),
+				}
+			},
+		},
+		OpCodeEntry{ // LD SP, HL
+			[]ParamPattern{{mode: AM_Register, regs: Reg_SP}, {mode: AM_Register, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xf9),
+				}
+			},
+		},
+		OpCodeEntry{ // LD SP, IX
+			[]ParamPattern{{mode: AM_Register, regs: Reg_SP}, {mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0xf9),
+				}
+			},
+		},
+		OpCodeEntry{ // LD SP, IY
+			[]ParamPattern{{mode: AM_Register, regs: Reg_SP}, {mode: AM_Register, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0xf9),
+				}
+			},
+		},
+		OpCodeEntry{ // LD r, (HL)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0b01000110 | rVal[p[0].R])}
+			},
+		},
 	},
+	"ldd":  bytes(0xed, 0xa2),
+	"lddr": bytes(0xed, 0xb8),
+	"ldi":  bytes(0xed, 0xa0),
+	"ldir": bytes(0xed, 0xb0),
+	"neg":  bytes(0xed, 0x44),
+	"nop":  bytes(0x00),
 }
