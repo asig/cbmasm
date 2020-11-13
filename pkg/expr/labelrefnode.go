@@ -23,6 +23,8 @@ import (
 )
 
 type SymbolRefNode struct {
+	baseNode
+
 	pos        text.Pos
 	symbol     string
 	maxSize    int

@@ -23,6 +23,8 @@ import (
 )
 
 type ConstNode struct {
+	baseNode
+
 	pos        text.Pos
 	size       int
 	val        int
@@ -43,7 +45,15 @@ func (n *ConstNode) ResultSize() int {
 }
 
 func (n *ConstNode) ForceSize(size int) bool {
-	if n.val < 1<<(size*8) {
+	var min, max int
+	if n.IsSigned() {
+		min = (-1) << (size*8 - 1)
+		max = (1 << (size*8 - 1)) - 1
+	} else {
+		min = 0
+		max = 1<<(size*8) - 1
+	}
+	if min <= n.val && n.val <= max {
 		n.size = size
 		return true
 	}

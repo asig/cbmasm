@@ -806,6 +806,7 @@ func (a *Assembler) z80Param() z80.Param {
 					if neg {
 						node = expr.NewUnaryOp(negPos, node, expr.Neg)
 					}
+					node.MarkSigned()
 					param.Val = node
 				}
 				a.match(scanner.RParen)
@@ -941,11 +942,10 @@ func (a *Assembler) factor(size int) expr.Node {
 	case scanner.Number:
 		p := a.lookahead.Pos
 		val := a.lookahead.IntVal
+		node = expr.NewConst(p, int(val), size)
 		if !checkSize(size, int(val)) {
 			a.AddError(p, "Constant $%x (decimal %d) is wider than %d bits", val, val, size*8)
-			break
 		}
-		node = expr.NewConst(p, int(val), size)
 		a.nextToken()
 	case scanner.Char:
 		p := a.lookahead.Pos
@@ -973,6 +973,7 @@ func (a *Assembler) factor(size int) expr.Node {
 		p := a.lookahead.Pos
 		if size < 2 {
 			a.AddError(a.lookahead.Pos, "Current PC is 16 bits wide, expected is a %d bit wide value", size*8)
+			node = expr.NewConst(p, 0, size)
 			break
 		}
 		node = expr.NewConst(p, a.section.PC(), size)
@@ -996,6 +997,31 @@ func (a *Assembler) emit(nodes ...expr.Node) {
 	}
 }
 
+func (a *Assembler) checkRange(n expr.Node) {
+	size := n.ResultSize()
+	val := n.Eval()
+	if n.IsRelative() {
+		val = val - (a.section.PC() + 1)
+		if val < -128 || val > 127 {
+			a.AddError(n.Pos(), "Branch target too far away.")
+		}
+		return
+	}
+
+	var min, max int
+	if n.IsSigned() {
+		min = (-1) << (size*8 - 1)
+		max = (1 << (size*8 - 1)) - 1
+	} else {
+		min = 0
+		max = 1<<(size*8) - 1
+	}
+
+	if val < min || val > max {
+		a.AddError(n.Pos(), "Value out of range.")
+	}
+}
+
 func (a *Assembler) emitNode(n expr.Node) {
 	if a.section == nil {
 		a.AddError(a.scanner.LineStart(), "No .org specified")
@@ -1008,14 +1034,8 @@ func (a *Assembler) emitNode(n expr.Node) {
 		val = 0
 		size = n.ResultSize()
 	} else {
+		a.checkRange(n)
 		val = n.Eval()
-		size = n.ResultSize()
-		if n.IsRelative() {
-			val = val - (a.section.PC() + 1)
-			if val < -128 || val > 127 {
-				a.AddError(n.Pos(), "Branch target too far away.")
-			}
-		}
 	}
 	for size > 0 {
 		a.section.Emit(byte(val & 0xff))
@@ -1133,6 +1153,7 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 		}
 		sym.val.Resolve(symbol, val.Eval())
 		if sym.val.IsResolved() {
+			a.checkRange(sym.val)
 			a.resolveDependencies(sym.name, sym.val)
 		}
 	}

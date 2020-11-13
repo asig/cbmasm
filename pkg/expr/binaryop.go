@@ -44,6 +44,8 @@ const (
 )
 
 type BinaryOpNode struct {
+	baseNode
+
 	left, right Node
 	op          BinaryOp
 }

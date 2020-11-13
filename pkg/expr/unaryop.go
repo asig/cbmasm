@@ -55,6 +55,8 @@ var (
 )
 
 type UnaryOpNode struct {
+	baseNode
+
 	pos  text.Pos
 	node Node
 	op   UnaryOp

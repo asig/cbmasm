@@ -34,5 +34,20 @@ type Node interface {
 	MarkRelative()
 	IsRelative() bool
 
+	MarkSigned()
+	IsSigned() bool
+
 	Pos() text.Pos
+}
+
+type baseNode struct {
+	signed bool
+}
+
+func (n *baseNode) IsSigned() bool {
+	return n.signed
+}
+
+func (n *baseNode) MarkSigned() {
+	n.signed = true
 }
