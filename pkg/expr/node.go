@@ -24,24 +24,55 @@ import (
 )
 
 type Node interface {
+	// ResultSize returns the size of the result
 	ResultSize() int
+
+	// ForceSize forces a certain size, and returns false if the value is too big
 	ForceSize(size int) bool
+
+	// Eval evaluates the node and panics if the node is unresolved
 	Eval() int
 
+	// Resolve resolves symbols
 	Resolve(label string, val int)
+
+	// IsResolved returns whether the node is resolved
 	IsResolved() bool
+
+	// UnresolvedSymbols returns a list of symbols that are not yet resolved.
 	UnresolvedSymbols() map[string]bool
 
+	// MarkRelative marks the node as relative. When emitting such nodes,
+	// instead of the absolute value, the difference to the PC is written out.
 	MarkRelative()
+
+	// IsRelative returns whether the node is relative.
 	IsRelative() bool
 
+	// MarkSigned marks the node as a sigend value
 	MarkSigned()
+
+	// IsSigned returns whether the node is signed
 	IsSigned() bool
 
+	// SetRange sets the valid range for this node
 	SetRange(min, max int)
+
+	// SetValidValues sets a list of valid values for this node.
+	SetValidValues(v ...int)
+
+	// Range returns the valid range, if any
 	Range() (Range, bool)
+
+	// Range returns the valid values, if any
+	ValidValues() ([]int, bool)
+
+	// CheckRange checks whether the value is in a valid range, and emits an error otherwise.
+	// If a range or valid values are set, they are used to compute the validity. Otherwise, the size and whether it is
+	// a signed value are used.
 	CheckRange(sink errors.Sink)
 
+	// Pos returns the position in the text of this node.
 	Pos() text.Pos
 }
 
@@ -50,8 +81,9 @@ type Range struct {
 }
 
 type baseNode struct {
-	signed bool
-	r      *Range
+	signed      bool
+	validValues []int
+	r           *Range
 }
 
 func (n *baseNode) IsSigned() bool {
@@ -66,6 +98,10 @@ func (n *baseNode) SetRange(min, max int) {
 	n.r = &Range{min: min, max: max}
 }
 
+func (n *baseNode) SetValidValues(values ...int) {
+	n.validValues = values
+}
+
 func (n *baseNode) Range() (Range, bool) {
 	if n.r == nil {
 		return Range{}, false
@@ -73,9 +109,27 @@ func (n *baseNode) Range() (Range, bool) {
 	return *n.r, true
 }
 
+func (n *baseNode) ValidValues() ([]int, bool) {
+	if n.validValues == nil {
+		return nil, false
+	}
+	return n.validValues, true
+}
+
 func checkRange(n Node, sink errors.Sink) {
 	size := n.ResultSize()
 	val := n.Eval()
+
+	if validVals, ok := n.ValidValues(); ok {
+		for _, v := range validVals {
+			if val == v {
+				return
+			}
+		}
+		sink.AddError(n.Pos(), "Value is not in list of supported values.")
+		return
+	}
+
 	var min, max int
 	if r, ok := n.Range(); ok {
 		min = r.min
