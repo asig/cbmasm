@@ -828,4 +828,15 @@ var Mnemonics = map[string]OpCodeEntryList{
 	},
 	"rrca": bytes(0x0f),
 	"rrd":  bytes(0xed, 0x67),
+	"rst": {
+		OpCodeEntry{ // RST p
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetValidValues(0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38)
+				return []expr.Node{
+					expr.NewBinaryOp(expr.NewConst(p[0].Pos, 0b11000111, 1), p[0].Val, expr.Or),
+				}
+			},
+		},
+	},
 }
