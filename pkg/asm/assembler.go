@@ -563,7 +563,8 @@ func handleZ80Mnemonic(a *Assembler, t scanner.Token) {
 		a.AddError(pos, fmt.Sprintf("Bad parameters for %s", t.StrVal))
 		return
 	}
-	for _, n := range cg(params, a) {
+	bytes := cg(params, a)
+	for _, n := range bytes {
 		a.emitNode(n)
 	}
 }
@@ -998,27 +999,12 @@ func (a *Assembler) emit(nodes ...expr.Node) {
 }
 
 func (a *Assembler) checkRange(n expr.Node) {
-	size := n.ResultSize()
-	val := n.Eval()
+	n.CheckRange(a)
 	if n.IsRelative() {
-		val = val - (a.section.PC() + 1)
+		val := n.Eval() - (a.section.PC() + 1)
 		if val < -128 || val > 127 {
 			a.AddError(n.Pos(), "Branch target too far away.")
 		}
-		return
-	}
-
-	var min, max int
-	if n.IsSigned() {
-		min = (-1) << (size*8 - 1)
-		max = (1 << (size*8 - 1)) - 1
-	} else {
-		min = 0
-		max = 1<<(size*8) - 1
-	}
-
-	if val < min || val > max {
-		a.AddError(n.Pos(), "Value out of range.")
 	}
 }
 
@@ -1032,11 +1018,11 @@ func (a *Assembler) emitNode(n expr.Node) {
 		// register a patch, and emit 0 bytes
 		a.registerPatch(a.section.PC(), n)
 		val = 0
-		size = n.ResultSize()
 	} else {
 		a.checkRange(n)
 		val = n.Eval()
 	}
+	size = n.ResultSize()
 	for size > 0 {
 		a.section.Emit(byte(val & 0xff))
 		val = val >> 8

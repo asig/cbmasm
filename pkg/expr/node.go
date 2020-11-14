@@ -19,6 +19,7 @@
 package expr
 
 import (
+	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 )
 
@@ -37,11 +38,20 @@ type Node interface {
 	MarkSigned()
 	IsSigned() bool
 
+	SetRange(min, max int)
+	Range() (Range, bool)
+	CheckRange(sink errors.Sink)
+
 	Pos() text.Pos
+}
+
+type Range struct {
+	min, max int
 }
 
 type baseNode struct {
 	signed bool
+	r      *Range
 }
 
 func (n *baseNode) IsSigned() bool {
@@ -50,4 +60,34 @@ func (n *baseNode) IsSigned() bool {
 
 func (n *baseNode) MarkSigned() {
 	n.signed = true
+}
+
+func (n *baseNode) SetRange(min, max int) {
+	n.r = &Range{min: min, max: max}
+}
+
+func (n *baseNode) Range() (Range, bool) {
+	if n.r == nil {
+		return Range{}, false
+	}
+	return *n.r, true
+}
+
+func checkRange(n Node, sink errors.Sink) {
+	size := n.ResultSize()
+	val := n.Eval()
+	var min, max int
+	if r, ok := n.Range(); ok {
+		min = r.min
+		max = r.max
+	} else if n.IsSigned() {
+		min = (-1) << (size*8 - 1)
+		max = (1 << (size*8 - 1)) - 1
+	} else {
+		min = 0
+		max = 1<<(size*8) - 1
+	}
+	if val < min || val > max {
+		sink.AddError(n.Pos(), "Value out of range.")
+	}
 }

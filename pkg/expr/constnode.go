@@ -19,6 +19,7 @@
 package expr
 
 import (
+	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 )
 
@@ -53,8 +54,8 @@ func (n *ConstNode) ForceSize(size int) bool {
 		min = 0
 		max = 1<<(size*8) - 1
 	}
+	n.size = size
 	if min <= n.val && n.val <= max {
-		n.size = size
 		return true
 	}
 	return false
@@ -85,4 +86,8 @@ func (n *ConstNode) IsRelative() bool {
 
 func (n *ConstNode) Pos() text.Pos {
 	return n.pos
+}
+
+func (n *ConstNode) CheckRange(sink errors.Sink) {
+	checkRange(n, sink)
 }

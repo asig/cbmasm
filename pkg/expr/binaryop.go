@@ -20,6 +20,7 @@ package expr
 
 import (
 	"fmt"
+	"github.com/asig/cbmasm/pkg/errors"
 
 	"github.com/asig/cbmasm/pkg/text"
 )
@@ -153,4 +154,10 @@ func (n *BinaryOpNode) IsRelative() bool {
 
 func (n *BinaryOpNode) Pos() text.Pos {
 	return n.left.Pos()
+}
+
+func (n *BinaryOpNode) CheckRange(sink errors.Sink) {
+	n.left.CheckRange(sink)
+	n.right.CheckRange(sink)
+	checkRange(n, sink)
 }

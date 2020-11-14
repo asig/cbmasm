@@ -19,6 +19,7 @@
 package expr
 
 import (
+	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 )
 
@@ -108,4 +109,8 @@ func (n *SymbolRefNode) IsRelative() bool {
 
 func (n *SymbolRefNode) Pos() text.Pos {
 	return n.pos
+}
+
+func (n *SymbolRefNode) CheckRange(sink errors.Sink) {
+	checkRange(n, sink)
 }
