@@ -565,6 +565,8 @@ func handleZ80Mnemonic(a *Assembler, t scanner.Token) {
 	}
 	bytes := cg(params, a)
 	for _, n := range bytes {
+		// CodeGen must only emit bytes, so enforce the size here
+		n.ForceSize(1)
 		a.emitNode(n)
 	}
 }
