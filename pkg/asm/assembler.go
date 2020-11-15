@@ -782,13 +782,16 @@ func (a *Assembler) z80Param() z80.Param {
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
 
 	case scanner.Ident:
-		if reg, found := z80.RegisterFromString(a.lookahead.StrVal); found {
-			a.nextToken()
-			return z80.Param{Pos: p, Mode: z80.AM_Register, R: reg}
-		}
-		if cond, found := z80.CondFromString(a.lookahead.StrVal); found {
-			a.nextToken()
-			return z80.Param{Pos: p, Mode: z80.AM_Cond, Cond: cond}
+		if _, found := a.symbols.get(a.lookahead.StrVal); !found {
+			// Only check for registers or conditions if it's not a symbol
+			if reg, found := z80.RegisterFromString(a.lookahead.StrVal); found {
+				a.nextToken()
+				return z80.Param{Pos: p, Mode: z80.AM_Register, R: reg}
+			}
+			if cond, found := z80.CondFromString(a.lookahead.StrVal); found {
+				a.nextToken()
+				return z80.Param{Pos: p, Mode: z80.AM_Cond, Cond: cond}
+			}
 		}
 		// Neither reg nor cond, must be expression
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: a.expr(2)}
