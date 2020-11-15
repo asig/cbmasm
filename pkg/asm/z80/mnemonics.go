@@ -37,6 +37,7 @@ const (
 	Reg_H
 	Reg_L
 	Reg_AF
+	Reg_AF_Prime
 	Reg_BC
 	Reg_DE
 	Reg_HL
@@ -81,22 +82,23 @@ func (r Register) IsDouble() bool {
 
 var (
 	stringToReg = map[string]Register{
-		"a":  Reg_A,
-		"b":  Reg_B,
-		"c":  Reg_C,
-		"d":  Reg_D,
-		"e":  Reg_E,
-		"h":  Reg_H,
-		"l":  Reg_L,
-		"af": Reg_AF,
-		"bc": Reg_BC,
-		"de": Reg_DE,
-		"hl": Reg_HL,
-		"sp": Reg_SP,
-		"i":  Reg_I,
-		"r":  Reg_R,
-		"ix": Reg_IX,
-		"iy": Reg_IY,
+		"a":   Reg_A,
+		"b":   Reg_B,
+		"c":   Reg_C,
+		"d":   Reg_D,
+		"e":   Reg_E,
+		"h":   Reg_H,
+		"l":   Reg_L,
+		"af":  Reg_AF,
+		"af'": Reg_AF_Prime,
+		"bc":  Reg_BC,
+		"de":  Reg_DE,
+		"hl":  Reg_HL,
+		"sp":  Reg_SP,
+		"i":   Reg_I,
+		"r":   Reg_R,
+		"ix":  Reg_IX,
+		"iy":  Reg_IY,
 	}
 )
 
@@ -245,6 +247,526 @@ func bytes(bs ...int) OpCodeEntryList {
 }
 
 var Mnemonics = map[string]OpCodeEntryList{
+	"adc": {
+		OpCodeEntry{ // ADC A,r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10001000 | rVal[p[1].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // ADC A,n
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xce), p[1].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // ADC A,(HL)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x8e)}
+			},
+		},
+		OpCodeEntry{ // ADC A,(IX + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0x8e), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // ADC A,(IY + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0x8e), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // ADC HL,ss
+			[]ParamPattern{{mode: AM_Register, regs: Reg_HL}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xed), c(0b01001010 | ddVal[p[1].R]<<4)}
+			},
+		},
+	},
+	"add": {
+		OpCodeEntry{ // ADD A,(HL)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x86)}
+			},
+		},
+		OpCodeEntry{ // ADD A,(IX + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0x86), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // ADD A,(IY + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0x86), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // ADD A,n
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xc6), p[1].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // ADD A,r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10000000 | rVal[p[1].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // ADD HL,ss
+			[]ParamPattern{{mode: AM_Register, regs: Reg_HL}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xed), c(0b00001001 | ddVal[p[1].R]<<4)}
+			},
+		},
+		OpCodeEntry{ // ADD IX,rr
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_IX | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				var rrVal = map[Register]int{
+					Reg_BC: 0,
+					Reg_DE: 1,
+					Reg_IX: 2,
+					Reg_SP: 3,
+				}
+				return []expr.Node{c(0xdd), c(0b00001001 | rrVal[p[1].R]<<4)}
+			},
+		},
+		OpCodeEntry{ // ADD IY,rr
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IY}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_IY | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				var rrVal = map[Register]int{
+					Reg_BC: 0,
+					Reg_DE: 1,
+					Reg_IY: 2,
+					Reg_SP: 3,
+				}
+				return []expr.Node{c(0xfd), c(0b00001001 | rrVal[p[1].R]<<4)}
+			},
+		},
+	},
+	"and": {
+		OpCodeEntry{ // AND r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10100000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // AND n
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xe6), p[0].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // AND (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xa6)}
+			},
+		},
+		OpCodeEntry{ // AND (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xa6), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // AND (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xa6), p[0].Val}
+			},
+		},
+	},
+	"bit": {
+		OpCodeEntry{ // BIT b,(HL)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b2 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b01000110, 1), expr.Or)
+				return []expr.Node{c(0xcb), b2}
+			},
+		},
+		OpCodeEntry{ // BIT b,(IX + d)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				p[1].Val.MarkSigned()
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b4 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b01000110, 1), expr.Or)
+				return []expr.Node{c(0xdd), c(0xcb), p[1].Val, b4}
+			},
+		},
+		OpCodeEntry{ // BIT b,(IY + d)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				p[1].Val.MarkSigned()
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b4 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b01000110, 1), expr.Or)
+				return []expr.Node{c(0xfd), c(0xcb), p[1].Val, b4}
+			},
+		},
+		OpCodeEntry{ // BIT b, r
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b2 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b01000000|rVal[p[1].R], 1), expr.Or)
+				return []expr.Node{
+					c(0xcb), b2,
+				}
+			},
+		},
+	},
+	"call": {
+		OpCodeEntry{ // CALL cc,pq
+			[]ParamPattern{{mode: AM_Cond, conds: Cond_NZ | Cond_Z | Cond_NC | Cond_C | Cond_PO | Cond_PE | Cond_P | Cond_M}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0b11000100 | condVal[p[0].Cond]<<3), loByte(p[1]), hiByte(p[1])}
+			},
+		},
+		OpCodeEntry{ // CALL pq
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xcd), loByte(p[0]), hiByte(p[0])}
+			},
+		},
+	},
+	"ccf": bytes(0x3f),
+	"cp": {
+		OpCodeEntry{ // CP r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10111000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // CP n
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfe), p[0].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // CP (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xbe)}
+			},
+		},
+		OpCodeEntry{ // OR (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xbe), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // OR (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xbe), p[0].Val}
+			},
+		},
+	},
+	"cpd":  bytes(0xed, 0xa9),
+	"cpdr": bytes(0xed, 0xb9),
+	"cpi":  bytes(0xed, 0xa1),
+	"cpir": bytes(0xed, 0xb1),
+	"cpl":  bytes(0x2f),
+	"daa":  bytes(0x27),
+	"dec": {
+		OpCodeEntry{ // DEC r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00000101 | rVal[p[0].R]<<3),
+				}
+			},
+		},
+		OpCodeEntry{ // DEC (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x35)}
+			},
+		},
+		OpCodeEntry{ // DEC (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0x35), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // DEC (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0x35), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // DEC rr
+			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00001011 | ddVal[p[0].R]<<3),
+				}
+			},
+		},
+		OpCodeEntry{ // DEC IX
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0x2b),
+				}
+			},
+		},
+		OpCodeEntry{ // DEC IY
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0x2b),
+				}
+			},
+		},
+	},
+	"di": bytes(0xf3),
+	"djnz": {
+		OpCodeEntry{ // DJNZ e
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkRelative()
+				return []expr.Node{
+					c(0x10), p[0].Val,
+				}
+			},
+		},
+	},
+	"ei": bytes(0xfb),
+	"ex": {
+		OpCodeEntry{ // EX AF, AF'
+			[]ParamPattern{{mode: AM_Register, regs: Reg_AF}, {mode: AM_Register, regs: Reg_AF_Prime}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0x08),
+				}
+			},
+		},
+		OpCodeEntry{ // EX DE, HL
+			[]ParamPattern{{mode: AM_Register, regs: Reg_DE}, {mode: AM_Register, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xeb),
+				}
+			},
+		},
+		OpCodeEntry{ // EX (SP), HL
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_SP}, {mode: AM_Register, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xe3),
+				}
+			},
+		},
+		OpCodeEntry{ // EX (SP), IX
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_SP}, {mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0xe3),
+				}
+			},
+		},
+		OpCodeEntry{ // EX (SP), IY
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_SP}, {mode: AM_Register, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0xe3),
+				}
+			},
+		},
+	},
+	"exx":  bytes(0xd9),
+	"halt": bytes(0x76),
+	"im": {
+		OpCodeEntry{ // IM n
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				if !p[0].Val.IsResolved() {
+					errorSink.AddError(p[0].Pos, "Argument for IM must be resolved.")
+					return []expr.Node{}
+				}
+				mode := p[0].Val.Eval()
+				switch mode {
+				case 0:
+					return []expr.Node{c(0xed), c(0x46)}
+				case 1:
+					return []expr.Node{c(0xed), c(0x56)}
+				case 2:
+					return []expr.Node{c(0xed), c(0x5e)}
+				default:
+					errorSink.AddError(p[0].Pos, "Invalid value %d for IM instruction. Supported values are: 0, 1, 2", mode)
+					return []expr.Node{}
+				}
+			},
+		},
+	},
+	"in": {
+		OpCodeEntry{ // IN r,(C)
+			[]ParamPattern{
+				{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A},
+				{mode: AM_RegisterIndirect, regs: Reg_C}, // Technically, this is incorrect, but we just care about the pattern.
+			},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xed), c(0b01000000 | rVal[p[1].R<<3]),
+				}
+			},
+		},
+		OpCodeEntry{ // IN A,(N)
+			[]ParamPattern{
+				{mode: AM_Register, regs: Reg_A},
+				{mode: AM_ExtAddressing},
+			},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.ForceSize(1)
+				return []expr.Node{
+					c(0xdd), p[0].Val,
+				}
+			},
+		},
+	},
+	"inc": {
+		OpCodeEntry{ // INC r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00000100 | rVal[p[0].R]<<3),
+				}
+			},
+		},
+		OpCodeEntry{ // INC rr
+			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b00000011 | ddVal[p[0].R]<<3),
+				}
+			},
+		},
+		OpCodeEntry{ // INC (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x34)}
+			},
+		},
+		OpCodeEntry{ // INC (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xdd), c(0x34), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // INC (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xfd), c(0x34), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // INC IX
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xdd), c(0x23),
+				}
+			},
+		},
+		OpCodeEntry{ // INC IY
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xfd), c(0x23),
+				}
+			},
+		},
+	},
+	"ind":  bytes(0xed, 0xaa),
+	"indr": bytes(0xed, 0xba),
+	"ini":  bytes(0xed, 0xa2),
+	"inir": bytes(0xed, 0xb2),
+	"jp": {
+		OpCodeEntry{ // JP cc,pq
+			[]ParamPattern{{mode: AM_Cond, conds: Cond_NZ | Cond_Z | Cond_NC | Cond_C | Cond_PO | Cond_PE | Cond_P | Cond_M}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0b11000010 | condVal[p[0].Cond]<<3), loByte(p[1]), hiByte(p[1])}
+			},
+		},
+		OpCodeEntry{ // JP pq
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xc3), loByte(p[0]), hiByte(p[0])}
+			},
+		},
+		OpCodeEntry{ // JP (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xe9)}
+			},
+		},
+		OpCodeEntry{ // JP (IX)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xdd), c(0xe9)}
+			},
+		},
+		OpCodeEntry{ // JP (IY)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xfd), c(0xe9)}
+			},
+		},
+	},
+	"jr": {
+		OpCodeEntry{ // JR cc,e
+			[]ParamPattern{{mode: AM_Cond, conds: Cond_NZ | Cond_Z | Cond_NC | Cond_C}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkRelative()
+				return []expr.Node{c(0b00100000 | condVal[p[0].Cond]<<3), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // JR cc,e
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkRelative()
+				return []expr.Node{c(0x18), p[0].Val}
+			},
+		},
+	},
 	"ld": {
 		OpCodeEntry{ // LD dd, (nn)
 			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_SP}, {mode: AM_ExtAddressing}},
@@ -836,6 +1358,265 @@ var Mnemonics = map[string]OpCodeEntryList{
 				return []expr.Node{
 					expr.NewBinaryOp(expr.NewConst(p[0].Pos, 0b11000111, 1), p[0].Val, expr.Or),
 				}
+			},
+		},
+	},
+	"sbc": {
+		OpCodeEntry{ // SBC A,r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10011000 | rVal[p[1].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // SBC A,n
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xde), p[1].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // SBC A,(HL)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x9e)}
+			},
+		},
+		OpCodeEntry{ // SBC A,(IX + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0x9e), p[1].Val}
+			},
+		},
+		OpCodeEntry{ // SBC A,(IY + d)
+			[]ParamPattern{{mode: AM_Register, regs: Reg_A}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0x9e), p[1].Val}
+			},
+		},
+
+		OpCodeEntry{ // SBC HL,ss
+			[]ParamPattern{{mode: AM_Register, regs: Reg_HL}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[1].Val.MarkSigned()
+				return []expr.Node{c(0xed), c(0b01000010 | ddVal[p[1].R]<<4)}
+			},
+		},
+	},
+	"scf": bytes(0x37),
+	"set": {
+		OpCodeEntry{ // SET b, r
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b2 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b11000000|rVal[p[1].R], 1), expr.Or)
+				return []expr.Node{
+					c(0xcb), b2,
+				}
+			},
+		},
+		OpCodeEntry{ // SET b,(HL)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b2 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b11000110, 1), expr.Or)
+				return []expr.Node{c(0xcb), b2}
+			},
+		},
+		OpCodeEntry{ // SET b,(IX + d)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				p[1].Val.MarkSigned()
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b4 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b11000110, 1), expr.Or)
+				return []expr.Node{c(0xdd), c(0xcb), p[1].Val, b4}
+			},
+		},
+		OpCodeEntry{ // SET b,(IY + d)
+			[]ParamPattern{{mode: AM_Immediate}, {mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.SetRange(0, 7)
+				p[0].Val.ForceSize(1)
+				p[1].Val.MarkSigned()
+				bitShifted := expr.NewBinaryOp(p[0].Val, expr.NewConst(text.Pos{}, 8, 1), expr.Mul)
+				b4 := expr.NewBinaryOp(bitShifted, expr.NewConst(p[1].Pos, 0b11000110, 1), expr.Or)
+				return []expr.Node{c(0xfd), c(0xcb), p[1].Val, b4}
+			},
+		},
+	},
+	"sla": {
+		OpCodeEntry{ // SLA r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xcb), c(0b00100000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // SLA (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xcb), c(0x26)}
+			},
+		},
+		OpCodeEntry{ // SLA (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xcb), p[0].Val, c(0x26)}
+			},
+		},
+		OpCodeEntry{ // SLA (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xcb), p[0].Val, c(0x26)}
+			},
+		},
+	},
+	"sra": {
+		OpCodeEntry{ // SRA r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xcb), c(0b00101000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // SRA (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xcb), c(0x2e)}
+			},
+		},
+		OpCodeEntry{ // SRA (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xcb), p[0].Val, c(0x2e)}
+			},
+		},
+		OpCodeEntry{ // SRA (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xcb), p[0].Val, c(0x2e)}
+			},
+		},
+	},
+	"srl": {
+		OpCodeEntry{ // SRL r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xcb), c(0b00111000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // SRL (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xcb), c(0x3e)}
+			},
+		},
+		OpCodeEntry{ // SRL (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xcb), p[0].Val, c(0x3e)}
+			},
+		},
+		OpCodeEntry{ // SRL (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xcb), p[0].Val, c(0x3e)}
+			},
+		},
+	},
+	"sub": {
+		OpCodeEntry{ // SUB r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10010000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // SUB n
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xd6), p[0].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // SUB (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0x96)}
+			},
+		},
+		OpCodeEntry{ // SUB (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0x96), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // SUB (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0x96), p[0].Val}
+			},
+		},
+	},
+	"xor": {
+		OpCodeEntry{ // XOR r
+			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0b10101000 | rVal[p[0].R]),
+				}
+			},
+		},
+		OpCodeEntry{ // XOR n
+			[]ParamPattern{{mode: AM_Immediate}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{
+					c(0xee), p[0].Val,
+				}
+			},
+		},
+		OpCodeEntry{ // XOR (HL)
+			[]ParamPattern{{mode: AM_RegisterIndirect, regs: Reg_HL}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				return []expr.Node{c(0xae)}
+			},
+		},
+		OpCodeEntry{ // XOR (IX + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IX}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xdd), c(0xae), p[0].Val}
+			},
+		},
+		OpCodeEntry{ // XOR (IY + d)
+			[]ParamPattern{{mode: AM_Indexed, regs: Reg_IY}},
+			func(p []Param, errorSink errors.Sink) []expr.Node {
+				p[0].Val.MarkSigned()
+				return []expr.Node{c(0xfd), c(0xae), p[0].Val}
 			},
 		},
 	},
