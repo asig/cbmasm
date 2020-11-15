@@ -8,7 +8,7 @@
 [X] Support proper value range in Nodes
 [X] Move "checkRange" call into Nodes
 
+[X] generate listings
 [ ] Add string constants also for .equ and conditional compilation
-[ ] generate listings
 [ ] introduce "platform"
     [ ] only allow Z80 code when platform is C128

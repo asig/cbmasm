@@ -70,6 +70,12 @@ var relOpToBinOp = map[scanner.TokenType]expr.BinaryOp{
 
 type mnemonicHandler func(a *Assembler, t scanner.Token)
 
+type ListingLine struct {
+	Addr  int
+	Bytes int
+	Line  text.Line
+}
+
 type Assembler struct {
 	// "Constant" values; not reset before Assemble()
 	includePaths []string
@@ -89,6 +95,8 @@ type Assembler struct {
 	assemblyEnabled stack
 	state           state
 
+	ListingLines []ListingLine
+
 	// current macro, only set when recording macros
 	macro *macro
 
@@ -100,6 +108,11 @@ type Assembler struct {
 
 	// Symbol table
 	symbols symbolTable
+
+	// All following fields are reset for every line
+
+	// Number of emitted bytes since it was last reset
+	emitted int
 }
 
 func New(includePaths []string) *Assembler {
@@ -121,6 +134,7 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
 	a.mnemonicHandler = handle6502Mnemonic
+	a.ListingLines = nil
 
 	a.symbols = newSymbolTable()
 	for _, d := range a.defines {
@@ -179,8 +193,11 @@ func (a *Assembler) resolveIncludes(t text.Text) text.Text {
 func (a *Assembler) assembleText(t text.Text) {
 	a.state = stateAssemble
 	for _, line := range t.Lines {
+		startPc := a.section.PC()
+		a.emitted = 0
 		a.beginLine(line)
 		a.processLine()
+		a.ListingLines = append(a.ListingLines, ListingLine{startPc, a.emitted, line})
 	}
 }
 
@@ -1032,6 +1049,7 @@ func (a *Assembler) emitNode(n expr.Node) {
 		val = val - (a.section.PC() + 1)
 	}
 	size = n.ResultSize()
+	a.emitted = a.emitted + size
 	for size > 0 {
 		a.section.Emit(byte(val & 0xff))
 		val = val >> 8

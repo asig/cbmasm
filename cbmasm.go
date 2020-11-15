@@ -67,11 +67,53 @@ var (
 	flagDefines     stringArrayFlag
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
+	flagListing     = flag.Bool("listing", false, "If true, a listing is generated.")
 )
 
 func usage() {
 	errorOutput.Println("Usage: c128asm {-I includedir} {-D define} [inputfile] [outputfile] [-plain]")
 	os.Exit(1)
+}
+
+func printLabels(a *asm.Assembler) {
+	labels := a.Labels()
+	names := make([]string, 0, len(labels))
+	maxLen := 0
+	for n := range labels {
+		names = append(names, n)
+		l := len(n)
+		if l > maxLen {
+			maxLen = l
+		}
+	}
+	sort.Strings(names)
+	statusOutput.Println("Labels:")
+	for _, n := range names {
+		val := labels[n]
+		for len(n) < maxLen {
+			n = n + " "
+		}
+		statusOutput.Printf("%s: $%04x\n", n, val)
+	}
+	statusOutput.Println()
+}
+
+func printListing(a *asm.Assembler) {
+	for _, l := range a.ListingLines {
+		bytes := []byte{}
+		if l.Bytes > 0 {
+			start := l.Addr - a.Origin()
+			bytes = a.GetBytes()[start : start+l.Bytes]
+		}
+		var byteStrs []string
+		for _, b := range bytes {
+			byteStrs = append(byteStrs, fmt.Sprintf("%02x", b))
+		}
+		for len(byteStrs) < 8 {
+			byteStrs = append(byteStrs, "  ")
+		}
+		statusOutput.Printf("%04x | %s | %s\n", l.Addr, strings.Join(byteStrs, " "), strings.TrimSuffix(string(l.Line.Runes), "\n"))
+	}
 }
 
 func main() {
@@ -149,28 +191,11 @@ func main() {
 	outputFile.Write(bytes)
 
 	if *flagDumpLabels {
-		labels := assembler.Labels()
-		names := make([]string, 0, len(labels))
-		maxLen := 0
-		for n := range labels {
-			names = append(names, n)
-			l := len(n)
-			if l > maxLen {
-				maxLen = l
-			}
-		}
-		sort.Strings(names)
-		statusOutput.Println("Labels:")
-		for _, n := range names {
-			val := labels[n]
-			for len(n) < maxLen {
-				n = n + " "
-			}
-			statusOutput.Printf("%s: $%04x\n", n, val)
-		}
-		statusOutput.Println()
+		printLabels(assembler)
+	}
+	if *flagListing {
+		printListing(assembler)
 	}
 
 	statusOutput.Printf("%d bytes written to %q.", len(bytes), outputFilename)
-
 }
