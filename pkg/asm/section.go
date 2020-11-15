@@ -59,13 +59,13 @@ func (section *Section) PC() int {
 
 func (section *Section) applyPatch(p patch) {
 	// TODO(asigner): Add warning for JMP ($xxFF)
+	p.node.CheckRange(section.errorSink)
 	val := p.node.Eval()
 	if p.node.IsRelative() {
 		val = val - (p.pc + 1)
 		if val < -128 || val > 127 {
 			section.errorSink.AddError(p.node.Pos(), "Branch target too far away.")
 		}
-
 	}
 	size := p.node.ResultSize()
 	pos := p.pc - section.org
