@@ -327,7 +327,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 		OpCodeEntry{ // ADD HL,ss
 			[]ParamPattern{{mode: AM_Register, regs: Reg_HL}, {mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
-				return []expr.Node{c(0xed), c(0b00001001 | ddVal[p[1].R]<<4)}
+				return []expr.Node{c(0b00001001 | ddVal[p[1].R]<<4)}
 			},
 		},
 		OpCodeEntry{ // ADD IX,rr
@@ -519,7 +519,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0b00001011 | ddVal[p[0].R]<<3),
+					c(0b00001011 | ddVal[p[0].R]<<4),
 				}
 			},
 		},
@@ -532,7 +532,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			},
 		},
 		OpCodeEntry{ // DEC IY
-			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IY}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
 					c(0xfd), c(0x2b),
@@ -628,7 +628,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0xed), c(0b01000000 | rVal[p[1].R<<3]),
+					c(0xed), c(0b01000000 | rVal[p[0].R]<<3),
 				}
 			},
 		},
@@ -639,7 +639,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0xdd), p[0].Val,
+					c(0xdb), p[1].Val,
 				}
 			},
 		},
@@ -657,7 +657,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0b00000011 | ddVal[p[0].R]<<3),
+					c(0b00000011 | ddVal[p[0].R]<<4),
 				}
 			},
 		},
@@ -688,7 +688,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			},
 		},
 		OpCodeEntry{ // INC IY
-			[]ParamPattern{{mode: AM_Register, regs: Reg_IX}},
+			[]ParamPattern{{mode: AM_Register, regs: Reg_IY}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
 					c(0xfd), c(0x23),
@@ -761,7 +761,7 @@ var Mnemonics = map[string]OpCodeEntryList{
 			[]ParamPattern{{mode: AM_Register, regs: Reg_BC | Reg_DE | Reg_HL | Reg_SP}, {mode: AM_Immediate}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0b00000011 | ddVal[p[0].R]<<4), loByte(p[1]), hiByte(p[1]),
+					c(0b00000001 | ddVal[p[0].R]<<4), loByte(p[1]), hiByte(p[1]),
 				}
 			},
 		},
@@ -808,13 +808,13 @@ var Mnemonics = map[string]OpCodeEntryList{
 		OpCodeEntry{ // LD r, (IX + d)
 			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Indexed, regs: Reg_IX}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
-				return []expr.Node{c(0xdd), c(0b01000110 | rVal[p[0].R<<3]), p[1].Val}
+				return []expr.Node{c(0xdd), c(0b01000110 | rVal[p[0].R]<<3), p[1].Val}
 			},
 		},
 		OpCodeEntry{ // LD r, (IY + d)
 			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_Indexed, regs: Reg_IY}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
-				return []expr.Node{c(0xfd), c(0b01000110 | rVal[p[0].R<<3]), p[1].Val}
+				return []expr.Node{c(0xfd), c(0b01000110 | rVal[p[0].R]<<3), p[1].Val}
 			},
 		},
 		OpCodeEntry{ // LD (IX + d), n
@@ -1004,11 +1004,11 @@ var Mnemonics = map[string]OpCodeEntryList{
 		OpCodeEntry{ // LD r, (HL)
 			[]ParamPattern{{mode: AM_Register, regs: Reg_B | Reg_C | Reg_D | Reg_E | Reg_H | Reg_L | Reg_A}, {mode: AM_RegisterIndirect, regs: Reg_HL}},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
-				return []expr.Node{c(0b01000110 | rVal[p[0].R])}
+				return []expr.Node{c(0b01000110 | rVal[p[0].R]<<3)}
 			},
 		},
 	},
-	"ldd":  bytes(0xed, 0xa2),
+	"ldd":  bytes(0xed, 0xa8),
 	"lddr": bytes(0xed, 0xb8),
 	"ldi":  bytes(0xed, 0xa0),
 	"ldir": bytes(0xed, 0xb0),
@@ -1060,18 +1060,18 @@ var Mnemonics = map[string]OpCodeEntryList{
 			},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0xed), c(0b10000001 | rVal[p[1].R<<3]),
+					c(0xed), c(0b01000001 | rVal[p[1].R]<<3),
 				}
 			},
 		},
-		OpCodeEntry{ // OUT (N), A
+		OpCodeEntry{ // OUT (N),A
 			[]ParamPattern{
 				{mode: AM_ExtAddressing},
 				{mode: AM_Register, regs: Reg_A},
 			},
 			func(p []Param, errorSink errors.Sink) []expr.Node {
 				return []expr.Node{
-					c(0xed), p[0].Val,
+					c(0xd3), p[0].Val,
 				}
 			},
 		},
