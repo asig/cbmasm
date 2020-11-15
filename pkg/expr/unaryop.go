@@ -112,6 +112,5 @@ func (n *UnaryOpNode) Pos() text.Pos {
 }
 
 func (n *UnaryOpNode) CheckRange(sink errors.Sink) {
-	n.node.CheckRange(sink)
 	checkRange(n, sink)
 }

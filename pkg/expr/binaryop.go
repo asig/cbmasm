@@ -157,7 +157,5 @@ func (n *BinaryOpNode) Pos() text.Pos {
 }
 
 func (n *BinaryOpNode) CheckRange(sink errors.Sink) {
-	n.left.CheckRange(sink)
-	n.right.CheckRange(sink)
 	checkRange(n, sink)
 }
