@@ -1,0 +1,14 @@
+#TODOs
+
+[X] Add defines on the command line
+[X] Add Z80 assembler for C128 mode
+[X] Add characters literals
+[X] PETSCII encoding
+[X] Add "screen encoding" function
+[X] Support proper value range in Nodes
+[X] Move "checkRange" call into Nodes
+
+[ ] Add string constants also for .equ and conditional compilation
+[ ] generate listings
+[ ] introduce "platform"
+    [ ] only allow Z80 code when platform is C128
