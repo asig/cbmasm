@@ -183,6 +183,10 @@ func isHexDigit(r rune) bool {
 	return r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F'
 }
 
+func isIdentStartChar(r rune) bool {
+	return r == '@' || r == '.' || r == '_' || unicode.IsLetter(r)
+}
+
 func isIdentChar(r rune) bool {
 	return r == '@' || r == '.' || r == '_' || unicode.IsLetter(r)
 }
@@ -193,7 +197,12 @@ func (scanner *Scanner) readIdent(ch rune) string {
 		s = s + string(ch)
 		ch = scanner.getch()
 	}
-	scanner.ungetch()
+	if ch == '\'' {
+		// Consider this being part of the ident for things like "AF'"
+		s = s + string(ch)
+	} else {
+		scanner.ungetch()
+	}
 	return s
 }
 
@@ -241,12 +250,13 @@ func (scanner *Scanner) Scan() Token {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
 		return t
-	case isIdentChar(ch):
+	case isIdentStartChar(ch):
 		t.StrVal = scanner.readIdent(ch)
-		if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
+		t.Type = Ident
+		if t.StrVal == "." {
+			t.Type = Dot
+		} else if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
 			t.Type = tt
-		} else {
-			t.Type = Ident
 		}
 	case ch == '%':
 		t.StrVal = "%"
@@ -329,14 +339,6 @@ func (scanner *Scanner) Scan() Token {
 		t.Type = Minus
 	case ch == '|':
 		t.Type = Bar
-	case ch == '.':
-		ch = scanner.getch()
-		if isIdentChar(ch) || unicode.IsDigit(ch) {
-			t.StrVal = "." + scanner.readIdent(ch)
-			t.Type = Ident
-		}
-		scanner.ungetch()
-		t.Type = Dot
 	case ch == ':':
 		t.Type = Colon
 	case ch == '<':
@@ -390,9 +392,9 @@ func (scanner *Scanner) readString(separator rune) string {
 				scanner.ungetch()
 				scanner.errorSink.AddError(p, "Unknown escape sequence")
 			}
-		case '\n':
+		case 0, '\n':
 			scanner.errorSink.AddError(p, "Unterminated string")
-			break
+			return s
 		default:
 			s = s + string(ch)
 		}
