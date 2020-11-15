@@ -807,6 +807,7 @@ func (a *Assembler) z80Param() z80.Param {
 					if neg {
 						node = expr.NewUnaryOp(negPos, node, expr.Neg)
 					}
+					node.ForceSize(1)
 					node.MarkSigned()
 					param.Val = node
 				}
@@ -1021,6 +1022,9 @@ func (a *Assembler) emitNode(n expr.Node) {
 	} else {
 		a.checkRange(n)
 		val = n.Eval()
+	}
+	if n.IsRelative() {
+		val = val - (a.section.PC() + 1)
 	}
 	size = n.ResultSize()
 	for size > 0 {
