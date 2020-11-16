@@ -607,6 +607,22 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 			param.mode = mos6502.AM_Relative
 			param.val.MarkRelative()
 		}
+	} else if !found && param.mode == mos6502.AM_AbsoluteIndexedX {
+		// Maybe it's AM_ZeroPageIndexedX?
+		opCode, found = opCodes[mos6502.AM_ZeroPageIndexedX]
+		if found {
+			// Yes, it is!
+			param.mode = mos6502.AM_ZeroPageIndexedX
+			param.val.ForceSize(1)
+		}
+	} else if !found && param.mode == mos6502.AM_AbsoluteIndexedY {
+		// Maybe it's AM_ZeroPageIndexedY?
+		opCode, found = opCodes[mos6502.AM_ZeroPageIndexedY]
+		if found {
+			// Yes, it is!
+			param.mode = mos6502.AM_ZeroPageIndexedY
+			param.val.ForceSize(1)
+		}
 	}
 	if !found {
 		a.AddError(t.Pos, "Invalid parameter.")
