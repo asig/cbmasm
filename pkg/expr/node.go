@@ -130,6 +130,11 @@ func checkRange(n Node, sink errors.Sink) {
 		return
 	}
 
+	if n.IsRelative() {
+		// Relative nodes will be checked when jump targets are computed.
+		return
+	}
+
 	var min, max int
 	if r, ok := n.Range(); ok {
 		min = r.min
