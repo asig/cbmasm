@@ -71,7 +71,7 @@ var (
 )
 
 func usage() {
-	errorOutput.Println("Usage: c128asm {-I includedir} {-D define} [inputfile] [outputfile] [-plain]")
+	errorOutput.Println("Usage: c128asm {-I includedir} {-D define} [-plain] [-dump_labels] [-listing] [inputfile] [outputfile] ")
 	os.Exit(1)
 }
 
