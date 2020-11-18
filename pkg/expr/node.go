@@ -23,6 +23,12 @@ import (
 	"github.com/asig/cbmasm/pkg/text"
 )
 
+type NodeType int
+const (
+	NodeType_Int = iota
+	NodeType_String
+)
+
 type Node interface {
 	// ResultSize returns the size of the result
 	ResultSize() int
@@ -30,8 +36,14 @@ type Node interface {
 	// ForceSize forces a certain size, and returns false if the value is too big
 	ForceSize(size int) bool
 
-	// Eval evaluates the node and panics if the node is unresolved
+	// Type returns the type of the node
+	Type() NodeType
+
+	// Eval evaluates the node as an int and panics if the node is unresolved, or not an int
 	Eval() int
+
+	// Eval evaluates the node as a string and panics if the node is unresolved, or not a string
+	EvalStr() string
 
 	// Resolve resolves symbols
 	Resolve(label string, val int)

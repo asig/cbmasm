@@ -32,9 +32,17 @@ const (
 	symbolMacro
 )
 
+type symbolType int
+
+const (
+	symbolTypeInt symbolType = iota
+	symbolTypeString
+)
+
 type symbol struct {
 	name string
 	kind symbolKind
+	typ symbolType
 	val  expr.Node // Only set for symbolKind in { symbolLabel, symbolConst }
 	m    *macro    // only set for symbolKind in { symbolMacro }
 }

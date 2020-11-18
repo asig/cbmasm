@@ -29,6 +29,8 @@ type ConstNode struct {
 	pos        text.Pos
 	size       int
 	val        int
+	strval     string
+	typ NodeType
 	isRelative bool
 }
 
@@ -37,8 +39,23 @@ func NewConst(pos text.Pos, val, size int) Node {
 		pos:        pos,
 		size:       size,
 		val:        val,
+		typ: NodeType_Int,
 		isRelative: false,
 	}
+}
+
+func NewStrConst(pos text.Pos, val string) Node {
+	return &ConstNode{
+		pos:        pos,
+		size:       len(val),
+		strval:        val,
+		typ: NodeType_String,
+		isRelative: false,
+	}
+}
+
+func (n *ConstNode) Type() NodeType {
+	return n.typ
 }
 
 func (n *ConstNode) ResultSize() int {
@@ -62,8 +79,19 @@ func (n *ConstNode) ForceSize(size int) bool {
 }
 
 func (n *ConstNode) Eval() int {
+	if n.typ != NodeType_Int {
+		panic("type is not int")
+	}
 	return n.val
 }
+
+func (n *ConstNode) EvalStr() string {
+	if n.typ != NodeType_String {
+		panic("type is not string")
+	}
+	return n.strval
+}
+
 
 func (n *ConstNode) IsResolved() bool {
 	return true

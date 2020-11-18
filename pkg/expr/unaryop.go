@@ -25,6 +25,7 @@ import (
 
 type UnaryOp struct {
 	transformation func(int) int
+	transformationStr func(string) string
 	size           func(Node) int
 }
 
@@ -51,7 +52,14 @@ var (
 	}
 	AsciiToPetscii = UnaryOp{
 		transformation: func(v int) int { return int(ascToPet[v&0xff]) },
-		size:           func(n Node) int { return 1 },
+		transformationStr: func(v string) string {
+			res := ""
+			for _, c := range v {
+				res = res + string(ascToPet[c&0xff])
+			}
+			return res
+		},
+		size:           func(n Node) int { return n.ResultSize() },
 	}
 )
 
@@ -71,6 +79,10 @@ func NewUnaryOp(pos text.Pos, node Node, op UnaryOp) Node {
 	}
 }
 
+func (n *UnaryOpNode) Type() NodeType {
+	return n.node.Type()
+}
+
 func (n *UnaryOpNode) ResultSize() int {
 	return n.op.size(n.node)
 }
@@ -80,11 +92,31 @@ func (n *UnaryOpNode) ForceSize(size int) bool {
 }
 
 func (n *UnaryOpNode) Eval() int {
+	if n.Type() != NodeType_Int {
+		panic("can't Eval() non-int node")
+	}
+	if n.op.transformation == nil {
+		panic("Int nodes not supported")
+	}
 	if !n.IsResolved() {
 		panic("Can't evaluate unresolved expr node")
 	}
 	v := n.node.Eval()
 	return n.op.transformation(v)
+}
+
+func (n *UnaryOpNode) EvalStr() string {
+	if n.Type() != NodeType_String {
+		panic("can't Eval() non-string node")
+	}
+	if n.op.transformationStr == nil {
+		panic("String nodes not supported")
+	}
+	if !n.IsResolved() {
+		panic("Can't evaluate unresolved expr node")
+	}
+	v := n.node.EvalStr()
+	return n.op.transformationStr(v)
 }
 
 func (n *UnaryOpNode) IsResolved() bool {

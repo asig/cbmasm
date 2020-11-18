@@ -56,6 +56,10 @@ func NewUnresolvedSymbol(pos text.Pos, symbol string, maxSize int) Node {
 	}
 }
 
+func (n *SymbolRefNode) Type() NodeType {
+	return NodeType_Int
+}
+
 func (n *SymbolRefNode) ResultSize() int {
 	return n.maxSize
 }
@@ -78,6 +82,10 @@ func (n *SymbolRefNode) Eval() int {
 		panic("Can't evaluate unresolved symbol node")
 	}
 	return n.val
+}
+
+func (n *SymbolRefNode) EvalStr() string {
+	panic("Can't eval as string")
 }
 
 func (n *SymbolRefNode) IsResolved() bool {

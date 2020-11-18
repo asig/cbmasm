@@ -88,25 +88,48 @@ func (n *BinaryOpNode) Eval() int {
 	if !n.IsResolved() {
 		panic("Can't evaluate non-const expr node")
 	}
-	l := n.left.Eval()
-	r := n.right.Eval()
+	if n.Type() != NodeType_Int {
+		panic("Can't Eval() a string node")
+	}
+	if n.left.Type() == NodeType_Int {
+		l := n.left.Eval()
+		r := n.right.Eval()
+		switch n.op {
+		case Add:
+			return l + r
+		case Sub:
+			return l - r
+		case Mul:
+			return l * r
+		case Mod:
+			return l % r
+		case Div:
+			return l / r
+		case And:
+			return l & r
+		case Or:
+			return l | r
+		case Xor:
+			return l ^ r
+		case Eq:
+			return n.boolToInt(l == r)
+		case Ne:
+			return n.boolToInt(l != r)
+		case Lt:
+			return n.boolToInt(l < r)
+		case Le:
+			return n.boolToInt(l <= r)
+		case Gt:
+			return n.boolToInt(l > r)
+		case Ge:
+			return n.boolToInt(l >= r)
+		}
+		panic(fmt.Sprintf("Unimplemented BinaryOp %d", n.op))
+	}
+	// Must be string
+	l := n.left.EvalStr()
+	r := n.right.EvalStr()
 	switch n.op {
-	case Add:
-		return l + r
-	case Sub:
-		return l - r
-	case Mul:
-		return l * r
-	case Mod:
-		return l % r
-	case Div:
-		return l / r
-	case And:
-		return l & r
-	case Or:
-		return l | r
-	case Xor:
-		return l ^ r
 	case Eq:
 		return n.boolToInt(l == r)
 	case Ne:
@@ -120,7 +143,11 @@ func (n *BinaryOpNode) Eval() int {
 	case Ge:
 		return n.boolToInt(l >= r)
 	}
-	panic(fmt.Sprintf("Unimplemented BinaryOp %d", n.op))
+	panic(fmt.Sprintf("BinaryOp %d not supported for strings", n.op))
+}
+
+func (n *BinaryOpNode) EvalStr() string {
+	panic("Can't evaluate BinaryOp node as string")
 }
 
 func (n *BinaryOpNode) IsResolved() bool {
@@ -158,4 +185,8 @@ func (n *BinaryOpNode) Pos() text.Pos {
 
 func (n *BinaryOpNode) CheckRange(sink errors.Sink) {
 	checkRange(n, sink)
+}
+
+func (n *BinaryOpNode) Type() NodeType {
+	return NodeType_Int
 }

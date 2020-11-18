@@ -88,7 +88,8 @@ expr := ["-"] term { "+"|"-"|"|" term } .
 term := factor { "*"|"/"|"%"|"&"|"^" factor } . 
 factor := "~" factor 
         | number 
-        | char-const
+        | char-const      
+        | string
         | ident 
         | '*'
         | "(" expr ")" .

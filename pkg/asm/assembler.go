@@ -267,12 +267,16 @@ func (a *Assembler) processLine() {
 		case scanner.If:
 			a.nextToken()
 			p := a.lookahead.Pos
-			e := a.expr(2)
+			e := a.expr(2, true)
 			if containsKey(relOpToBinOp, a.lookahead.Type) {
 				binOp := relOpToBinOp[a.lookahead.Type]
 				a.nextToken()
-				e2 := a.expr(2)
-				e = expr.NewBinaryOp(e, e2, binOp)
+				e2 := a.expr(2, true)
+				if e.Type() != e2.Type() {
+					a.AddError(e2.Pos(), "types don't match")
+				} else {
+					e = expr.NewBinaryOp(e, e2, binOp)
+				}
 			}
 			if !e.IsResolved() {
 				a.AddError(p, "expression is not resolved")
@@ -385,7 +389,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		// handle byte const
 		pos := a.lookahead.Pos
 		valNode := expr.NewConst(pos, 0, 1)
-		sizeNode := a.expr(2)
+		sizeNode := a.expr(2, false)
 		if !sizeNode.IsResolved() {
 			a.AddError(pos, "Expression is unresolved")
 			sizeNode = expr.NewConst(pos, 1, 2)
@@ -405,17 +409,17 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Word:
 		a.nextToken()
 		// handle wird const
-		nodes := []expr.Node{a.expr(2)}
+		nodes := []expr.Node{a.expr(2, false)}
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			n2 := a.expr(2)
+			n2 := a.expr(2, false)
 			nodes = append(nodes, n2)
 		}
 		a.emit(nodes...)
 	case scanner.Org:
 		a.nextToken()
 		// set origin
-		orgNode := a.expr(2)
+		orgNode := a.expr(2, false)
 		org := 0
 		if orgNode.IsResolved() {
 			org = orgNode.Eval()
@@ -441,7 +445,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.nextToken()
 		// label is equ name!
 		pos := t.Pos
-		val := a.expr(2)
+		val := a.expr(2, true)
 		err := a.addSymbol(label, symbolConst, val)
 		if err != nil {
 			a.AddError(pos, err.Error())
@@ -679,7 +683,7 @@ func (a *Assembler) actMacroParam() string {
 			a.nextToken()
 		}
 	}
-	a.expr(2)
+	a.expr(2, true)
 	endPos := a.lookahead.Pos
 	return strings.TrimSpace(a.scanner.Line().Extract(startPos, endPos))
 }
@@ -709,12 +713,12 @@ func (a *Assembler) mos6502Param() mos6502Param {
 		switch a.lookahead.Type {
 		case scanner.Lt:
 			a.nextToken()
-			node = expr.NewUnaryOp(p, a.expr(2), expr.LoByte)
+			node = expr.NewUnaryOp(p, a.expr(2, false), expr.LoByte)
 		case scanner.Gt:
 			a.nextToken()
-			node = expr.NewUnaryOp(p, a.expr(2), expr.HiByte)
+			node = expr.NewUnaryOp(p, a.expr(2, false), expr.HiByte)
 		default:
-			node = a.expr(1)
+			node = a.expr(1, false)
 		}
 		return mos6502Param{mode: am, val: node}
 	case scanner.LParen:
@@ -722,7 +726,7 @@ func (a *Assembler) mos6502Param() mos6502Param {
 		// AM_IndexedIndirect  // ($aa,X)
 		// AM_IndirectIndexed  // ($aa),Y
 		a.nextToken()
-		node := a.expr(2)
+		node := a.expr(2, false)
 		am := mos6502.AM_AbsoluteIndirect
 
 		if a.lookahead.Type == scanner.Comma {
@@ -777,7 +781,7 @@ func (a *Assembler) mos6502Param() mos6502Param {
 			return mos6502Param{mode: mos6502.AM_Accumulator, val: nil}
 		}
 		am := mos6502.AM_Absolute
-		node := a.expr(2)
+		node := a.expr(2, false)
 		am = am.WithSize(node.ResultSize())
 		if a.lookahead.Type == scanner.Comma {
 			a.nextToken()
@@ -811,7 +815,7 @@ func (a *Assembler) z80Param() z80.Param {
 			op = expr.HiByte
 		}
 		a.nextToken()
-		node := expr.NewUnaryOp(p, a.expr(2), op)
+		node := expr.NewUnaryOp(p, a.expr(2, false), op)
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
 
 	case scanner.Ident:
@@ -827,7 +831,7 @@ func (a *Assembler) z80Param() z80.Param {
 			}
 		}
 		// Neither reg nor cond, must be expression
-		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: a.expr(2)}
+		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: a.expr(2, false)}
 	case scanner.LParen:
 		// RegisterIndirect, Indexed, or ExtAddressing
 		a.nextToken()
@@ -841,7 +845,7 @@ func (a *Assembler) z80Param() z80.Param {
 					neg := a.lookahead.Type == scanner.Minus
 					negPos := a.lookahead.Pos
 					a.nextToken()
-					node := a.expr(1)
+					node := a.expr(1, false)
 					if neg {
 						node = expr.NewUnaryOp(negPos, node, expr.Neg)
 					}
@@ -854,11 +858,11 @@ func (a *Assembler) z80Param() z80.Param {
 			}
 		}
 		// must be expr()
-		node := a.expr(2)
+		node := a.expr(2, false)
 		a.match(scanner.RParen)
 		return z80.Param{Pos: p, Mode: z80.AM_ExtAddressing, Val: node}
 	default:
-		node := a.expr(2)
+		node := a.expr(2, false)
 		return z80.Param{Pos: p, Mode: z80.AM_Immediate, Val: node}
 	}
 }
@@ -868,14 +872,14 @@ func (a *Assembler) dbOp() []expr.Node {
 	switch {
 	case a.lookahead.Type == scanner.Lt:
 		a.nextToken()
-		n := a.expr(1)
+		n := a.expr(1, false)
 		return []expr.Node{expr.NewUnaryOp(p, n, expr.LoByte)}
 	case a.lookahead.Type == scanner.Gt:
 		a.nextToken()
-		n := a.expr(1)
+		n := a.expr(1, false)
 		return []expr.Node{expr.NewUnaryOp(p, n, expr.HiByte)}
 	case a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "scr":
-		// "screen" "(" basicDbOp { "," basicDbOp } ")"
+		// "scr" "(" basicDbOp { "," basicDbOp } ")"
 		a.nextToken()
 		a.match(scanner.LParen)
 		nodes := wrapWithUnaryOp(a.basicDbOp(), expr.ScreenCode)
@@ -912,7 +916,7 @@ func (a *Assembler) basicDbOp() []expr.Node {
 		}
 		return res
 	default:
-		return []expr.Node{a.expr(1)}
+		return []expr.Node{a.expr(1, false)}
 	}
 }
 
@@ -921,7 +925,7 @@ func containsKey(m map[scanner.TokenType]expr.BinaryOp, key scanner.TokenType) b
 	return found
 }
 
-func (a *Assembler) expr(size int) expr.Node {
+func (a *Assembler) expr(size int, stringsAllowed bool) expr.Node {
 	// expr := ["-"] term { "+"|"-"|"|" term } .
 	neg := false
 	var negPos text.Pos
@@ -930,9 +934,13 @@ func (a *Assembler) expr(size int) expr.Node {
 		negPos = a.lookahead.Pos
 		a.nextToken()
 	}
-	node := a.term(size)
+	node := a.term(size, stringsAllowed)
 	if neg {
-		node = expr.NewUnaryOp(negPos, node, expr.Neg)
+		if node.Type() != expr.NodeType_Int {
+			a.AddError(negPos, "Operation not supported on strings")
+		} else {
+			node = expr.NewUnaryOp(negPos, node, expr.Neg)
+		}
 	}
 
 	ops := map[scanner.TokenType]expr.BinaryOp{
@@ -944,13 +952,18 @@ func (a *Assembler) expr(size int) expr.Node {
 	for containsKey(ops, a.lookahead.Type) {
 		op := ops[a.lookahead.Type]
 		a.nextToken()
-		n2 := a.term(size)
-		node = expr.NewBinaryOp(node, n2, op)
+		p := a.lookahead.Pos
+		n2 := a.term(size, stringsAllowed)
+		if n2.Type() != expr.NodeType_Int || node.Type() != expr.NodeType_Int {
+			a.AddError(p, "operation only supported on int types")
+		} else {
+			node = expr.NewBinaryOp(node, n2, op)
+		}
 	}
 	return node
 }
 
-func (a *Assembler) term(size int) expr.Node {
+func (a *Assembler) term(size int, stringsAllowed bool) expr.Node {
 	// term := factor { "*"|"/"|"%"|"&"|"^" factor } .
 	ops := map[scanner.TokenType]expr.BinaryOp{
 		scanner.Asterisk:  expr.Mul,
@@ -960,25 +973,34 @@ func (a *Assembler) term(size int) expr.Node {
 		scanner.Caret:     expr.Xor,
 	}
 
-	node := a.factor(size)
+	node := a.factor(size, stringsAllowed)
 	for containsKey(ops, a.lookahead.Type) {
 		op := ops[a.lookahead.Type]
 		a.nextToken()
-		n2 := a.factor(size)
-		node = expr.NewBinaryOp(node, n2, op)
+		p := a.lookahead.Pos
+		n2 := a.factor(size, stringsAllowed)
+		if n2.Type() != expr.NodeType_Int || node.Type() != expr.NodeType_Int {
+			a.AddError(p, "operation only supported on int types")
+		} else {
+			node = expr.NewBinaryOp(node, n2, op)
+		}
 	}
 	return node
 }
 
-func (a *Assembler) factor(size int) expr.Node {
-	// factor := "~" factor | number | char-const | ident | '*'.
+func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
+	// factor := "~" factor | number | char-const | string | ident | "*'.
 	var node expr.Node
 	switch a.lookahead.Type {
 	case scanner.Tilde:
 		p := a.lookahead.Pos
 		a.nextToken()
-		node = a.factor(size)
-		node = expr.NewUnaryOp(p, node, expr.Not)
+		node = a.factor(size, stringsAllowed)
+		if node.Type() != expr.NodeType_Int {
+			a.AddError(p, "operation only supported on int type")
+		} else {
+			node = expr.NewUnaryOp(p, node, expr.Not)
+		}
 	case scanner.Number:
 		p := a.lookahead.Pos
 		val := a.lookahead.IntVal
@@ -992,13 +1014,35 @@ func (a *Assembler) factor(size int) expr.Node {
 		val := a.lookahead.StrVal
 		node = expr.NewUnaryOp(p, expr.NewConst(p, int(val[0]), size), expr.AsciiToPetscii)
 		a.nextToken()
+	case scanner.String:
+		p := a.lookahead.Pos
+		str := a.lookahead.StrVal
+		if stringsAllowed {
+			node = expr.NewUnaryOp(p, expr.NewStrConst(p, str), expr.AsciiToPetscii)
+		} else {
+			a.AddError(p, "Strings are not allowed")
+			node = expr.NewConst(p, 0, 1)
+		}
+		a.nextToken()
 	case scanner.Ident:
 		p := a.lookahead.Pos
 		sym := a.lookahead.StrVal
 		node = nil
 		if s, found := a.symbols.get(sym); found {
 			if s.val.IsResolved() {
-				node = expr.NewSymbolRef(p, sym, size, s.val.Eval())
+				switch s.val.Type() {
+				case expr.NodeType_Int:
+					node = expr.NewConst(p, s.val.Eval(), s.val.ResultSize())
+				case expr.NodeType_String:
+					if stringsAllowed {
+						node = expr.NewStrConst(p, s.val.EvalStr())
+					} else {
+						a.AddError(p, "Strings not allowed")
+						node = expr.NewConst(p, 0, size)
+					}
+				default:
+					panic(fmt.Sprintf("Unhandled type %v", s.val.Type()))
+				}
 			}
 		}
 		if node == nil {
@@ -1007,7 +1051,7 @@ func (a *Assembler) factor(size int) expr.Node {
 		a.nextToken()
 	case scanner.LParen:
 		a.nextToken()
-		node = a.expr(size)
+		node = a.expr(size, stringsAllowed)
 		a.match(scanner.RParen)
 	case scanner.Asterisk:
 		p := a.lookahead.Pos
