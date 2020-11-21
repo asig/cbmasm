@@ -35,7 +35,7 @@ import (
 
 var (
 	SupportedPlatforms = []string{"c128", "c64"}
-	SupportedCPUs = []string{"6502", "z80"}
+	SupportedCPUs      = []string{"6502", "z80"}
 )
 
 func IsSupportedPlatform(s string) bool {
@@ -103,10 +103,10 @@ type ListingLine struct {
 
 type Assembler struct {
 	// "Constant" values; not reset before Assemble()
-	includePaths []string
-	defines      symbolTable
+	includePaths    []string
+	defines         symbolTable
 	defaultPlatform string
-	defaultCpu string
+	defaultCPU      string
 
 	// All following fields are reset in Assemble()
 
@@ -119,6 +119,7 @@ type Assembler struct {
 	tokenBuf        scanner.Token
 	tokenBufSet     bool
 
+	canSetPlatform  bool
 	assemblyEnabled stack
 	state           state
 
@@ -142,19 +143,18 @@ type Assembler struct {
 	emitted int
 }
 
-func New(includePaths []string, defaultCpu string, defaultPlatform string, defines []string) *Assembler {
+func New(includePaths []string, defaultCPU string, defaultPlatform string, defines []string) *Assembler {
 	a := &Assembler{
-		includePaths: includePaths,
-		defines:      newSymbolTable(),
-		defaultCpu: defaultCpu,
+		includePaths:    includePaths,
+		defines:         newSymbolTable(),
+		defaultCPU:      defaultCPU,
 		defaultPlatform: defaultPlatform,
 	}
 	for _, d := range defines {
-		a.defines.add(symbol{name: d, val:  expr.NewConst(text.Pos{}, 1, 1), kind: symbolConst})
+		a.defines.add(symbol{name: d, val: expr.NewConst(text.Pos{}, 1, 1), kind: symbolConst})
 	}
 	return a
 }
-
 
 func (a *Assembler) Assemble(t text.Text) {
 	a.errors = nil
@@ -163,10 +163,13 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.patchesPerLabel = make(map[string][]patch)
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
-	a.mnemonicHandler = handle6502Mnemonic
 	a.ListingLines = nil
-
+	a.canSetPlatform = true
 	a.symbols = newSymbolTable()
+
+	a.setCPU(a.defaultCPU)
+	a.setPlatform(a.defaultPlatform)
+
 	for _, val := range a.defines.symbols() {
 		if err := a.addSymbol(val.name, val.kind, val.val); err != nil {
 			a.AddError(text.Pos{}, err.Error())
@@ -487,31 +490,26 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		cpu := a.lookahead.StrVal
 		pos := a.lookahead.Pos
 		a.match(scanner.String)
-		switch strings.ToLower(cpu) {
-		case "6502":
-			a.mnemonicHandler = handle6502Mnemonic
-		case "z80":
-			a.mnemonicHandler = handleZ80Mnemonic
-		default:
+		if !IsSupportedCPU(cpu) {
 			a.AddError(pos, "Unknown CPU %q", cpu)
+		} else {
+			a.setCPU(cpu)
 		}
-		a.symbols.remove("CPU")
-		a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(pos, strings.ToLower(cpu)), kind: symbolConst})
 	case scanner.Platform:
+		if !a.canSetPlatform {
+			a.AddError(t.Pos, "Can't change platform anymore")
+			return
+		}
+		a.canSetPlatform = false
 		a.nextToken()
 		platform := a.lookahead.StrVal
 		pos := a.lookahead.Pos
 		a.match(scanner.String)
-		switch strings.ToLower(platform) {
-		case "c64":
-			a.mnemonicHandler = handle6502Mnemonic
-		case "z80":
-			a.mnemonicHandler = handleZ80Mnemonic
-		default:
-			a.AddError(pos, "Unknown CPU %q", cpu)
+		if !IsSupportedPlatform(platform) {
+			a.AddError(pos, "Unknown platform %q", platform)
+		} else {
+			a.setPlatform(platform)
 		}
-		a.symbols.remove("CPU")
-		a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(pos, cpu), kind: symbolConst})
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -561,6 +559,25 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.AddError(t.Pos, "Identifier or directive expected")
 		return
 	}
+}
+
+func (a *Assembler) setCPU(cpu string) {
+	cpu = strings.ToLower(cpu)
+	switch cpu {
+	case "6502":
+		a.mnemonicHandler = handle6502Mnemonic
+	case "z80":
+		a.mnemonicHandler = handleZ80Mnemonic
+	default:
+		panic(fmt.Sprintf("Unsupported CPU %s", cpu))
+	}
+	a.symbols.remove("CPU")
+	a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(text.Pos{}, cpu), kind: symbolConst})
+}
+
+func (a *Assembler) setPlatform(p string) {
+	a.symbols.remove("PLATFORM")
+	a.symbols.add(symbol{name: "PLATFORM", val: expr.NewStrConst(text.Pos{}, strings.ToLower(p)), kind: symbolConst})
 }
 
 func (a *Assembler) macroParam() {
