@@ -44,6 +44,7 @@ op := ".macro" [ident {"," ident }]
     | ".word" expr {"," expr }
     | ".reserve" expr ["," dbOp ]
     | ".cpu" string 
+    | ".platform" string 
     | mnemonic [ param {"," param } ]
     | macroname [ actmacroparam {"," actmacroparam } ]
 .
