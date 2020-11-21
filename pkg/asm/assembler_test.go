@@ -58,7 +58,7 @@ l:
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{})
+			assembler := New([]string{}, "6502", "c128", []string{})
 			assembler.Assemble(text.Process("", test.text))
 			errs := assembler.Errors()
 			if len(errs) != len(test.wantErrors) {
@@ -215,7 +215,7 @@ foo .equ 1
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{})
+			assembler := New([]string{}, "6502", "c128", []string{})
 			assembler.Assemble(text.Process("", test.text))
 			errs := assembler.Errors()
 			if len(errs) != 0 {

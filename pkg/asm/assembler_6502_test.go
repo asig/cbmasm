@@ -765,8 +765,8 @@ L NOP
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{})
-			src := " .cpu \"6502\"\n .org 0\n " + test.text
+			assembler := New([]string{}, "6502", "c128", []string{})
+			src := " .org 0\n " + test.text
 			assembler.Assemble(text.Process("", src))
 			errs := assembler.Errors()
 			if len(errs) != 0 {
