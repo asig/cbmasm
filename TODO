@@ -7,8 +7,11 @@
 [X] Add "screen encoding" function
 [X] Support proper value range in Nodes
 [X] Move "checkRange" call into Nodes
-
 [X] generate listings
-[ ] Add string constants also for .equ and conditional compilation
-[ ] introduce "platform"
+[X] Add string constants also for .equ and conditional compilation
+[X] introduce "platform"
     [ ] only allow Z80 code when platform is C128
+[ ] .fail implementation:
+    [ ] Check for garbage after .fail
+    [ ] allow comma separated list of messages
+    [ ] Allow symbols in message
