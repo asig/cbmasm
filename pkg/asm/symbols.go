@@ -73,7 +73,11 @@ func (t *symbolTable) get(name string) (*symbol, bool) {
 	return s, true
 }
 
-func (t *symbolTable) remove(predicate func(*symbol) bool) {
+func (t *symbolTable) remove(name string) {
+	delete(t.m, name)
+}
+
+func (t *symbolTable) removeMatching(predicate func(*symbol) bool) {
 	for key, val := range t.m {
 		if predicate(val) {
 			delete(t.m, key)

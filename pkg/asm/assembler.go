@@ -33,6 +33,31 @@ import (
 	"github.com/asig/cbmasm/pkg/text"
 )
 
+var (
+	SupportedPlatforms = []string{"c128", "c64"}
+	SupportedCPUs = []string{"6502", "z80"}
+)
+
+func IsSupportedPlatform(s string) bool {
+	s = strings.ToLower(s)
+	for _, p := range SupportedPlatforms {
+		if s == p {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSupportedCPU(s string) bool {
+	s = strings.ToLower(s)
+	for _, p := range SupportedCPUs {
+		if s == p {
+			return true
+		}
+	}
+	return false
+}
+
 // patch records nodes that can't be evaluated because of undefined nodes
 type patch struct {
 	pc   int       // Place to patch
@@ -80,6 +105,8 @@ type Assembler struct {
 	// "Constant" values; not reset before Assemble()
 	includePaths []string
 	defines      symbolTable
+	defaultPlatform string
+	defaultCpu string
 
 	// All following fields are reset in Assemble()
 
@@ -115,17 +142,19 @@ type Assembler struct {
 	emitted int
 }
 
-func New(includePaths []string) *Assembler {
+func New(includePaths []string, defaultCpu string, defaultPlatform string, defines []string) *Assembler {
 	a := &Assembler{
 		includePaths: includePaths,
 		defines:      newSymbolTable(),
+		defaultCpu: defaultCpu,
+		defaultPlatform: defaultPlatform,
+	}
+	for _, d := range defines {
+		a.defines.add(symbol{name: d, val:  expr.NewConst(text.Pos{}, 1, 1), kind: symbolConst})
 	}
 	return a
 }
 
-func (a *Assembler) AddDefine(name string, val expr.Node) {
-	a.defines.add(symbol{name: name, val: val, kind: symbolConst})
-}
 
 func (a *Assembler) Assemble(t text.Text) {
 	a.errors = nil
@@ -466,6 +495,23 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		default:
 			a.AddError(pos, "Unknown CPU %q", cpu)
 		}
+		a.symbols.remove("CPU")
+		a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(pos, strings.ToLower(cpu)), kind: symbolConst})
+	case scanner.Platform:
+		a.nextToken()
+		platform := a.lookahead.StrVal
+		pos := a.lookahead.Pos
+		a.match(scanner.String)
+		switch strings.ToLower(platform) {
+		case "c64":
+			a.mnemonicHandler = handle6502Mnemonic
+		case "z80":
+			a.mnemonicHandler = handleZ80Mnemonic
+		default:
+			a.AddError(pos, "Unknown CPU %q", cpu)
+		}
+		a.symbols.remove("CPU")
+		a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(pos, cpu), kind: symbolConst})
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -1144,7 +1190,7 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 }
 
 func (a *Assembler) clearLocalLabels() {
-	a.symbols.remove(func(sym *symbol) bool { return isLocalLabel(sym.name) })
+	a.symbols.removeMatching(func(sym *symbol) bool { return isLocalLabel(sym.name) })
 	for label := range a.patchesPerLabel {
 		if isLocalLabel(label) {
 			delete(a.patchesPerLabel, label)

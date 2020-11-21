@@ -61,6 +61,7 @@ const (
 
 	// directives
 	Cpu
+	Platform
 	Ifdef
 	Ifndef
 	If
@@ -81,22 +82,23 @@ const (
 )
 
 var identToTokenType = map[string]TokenType{
-	".cpu":     Cpu,
-	".ifdef":   Ifdef,
-	".ifndef":  Ifndef,
-	".if":      If,
-	".else":    Else,
-	".endif":   Endif,
-	".fail":    Fail,
-	".include": Include,
-	".incbin'": Incbin,
-	".reserve": Reserve,
-	".byte":    Byte,
-	".word":    Word,
-	".equ":     Equ,
-	".org":     Org,
-	".macro":   Macro,
-	".endm":    Endm,
+	".cpu":      Cpu,
+	".platform": Platform,
+	".ifdef":    Ifdef,
+	".ifndef":   Ifndef,
+	".if":       If,
+	".else":     Else,
+	".endif":    Endif,
+	".fail":     Fail,
+	".include":  Include,
+	".incbin'":  Incbin,
+	".reserve":  Reserve,
+	".byte":     Byte,
+	".word":     Word,
+	".equ":      Equ,
+	".org":      Org,
+	".macro":    Macro,
+	".endm":     Endm,
 }
 
 var tokenTypeToString = map[TokenType]string{
@@ -128,6 +130,8 @@ var tokenTypeToString = map[TokenType]string{
 	Hash:      "'#'",
 	Tilde:     "'~'",
 	Caret:     "'^'",
+	Cpu:       ".cpu",
+	Platform:  ".platform",
 	Ifdef:     ".ifdef",
 	Ifndef:    ".ifndef",
 	If:        ".if",

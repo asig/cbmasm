@@ -65,14 +65,13 @@ func (f *pathListFlag) Set(value string) error {
 }
 
 var (
-	supportedPlatforms = []string{"c128", "c64"}
-
 	flagIncludeDirs pathListFlag
 	flagDefines     stringArrayFlag
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
 	flagListing     = flag.Bool("listing", false, "If true, a listing is generated.")
-	flagPlatform    = flag.String("platform", "c128", fmt.Sprintf("Target platform. Supported values are: %s", strings.Join(supportedPlatforms, ", ")))
+	flagCpu    = flag.String("cpu", "6502", fmt.Sprintf("CPU to assemble code for. Supported values are: %s", strings.Join(asm.SupportedCPUs, ", ")))
+	flagPlatform    = flag.String("platform", "c128", fmt.Sprintf("Target platform. Supported values are: %s", strings.Join(asm.SupportedPlatforms, ", ")))
 )
 
 func usage() {
@@ -129,15 +128,8 @@ func init() {
 	flag.Var(&flagDefines, "D", "defined symbols; can be repeated")
 	flag.Parse()
 
-	platformValid := false
-	for _, p := range supportedPlatforms {
-		if p == *flagPlatform {
-			platformValid = true
-			break
-		}
-	}
-	if !platformValid {
-		errorOutput.Printf("Unsupported platform %q. Valid platforms are: %s.", *flagPlatform, strings.Join(supportedPlatforms, ", "))
+	if !asm.IsSupportedPlatform(*flagPlatform) {
+		errorOutput.Printf("Unsupported platform %q. Valid platforms are: %s.", *flagPlatform, strings.Join(asm.SupportedPlatforms, ", "))
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -186,11 +178,11 @@ func main() {
 
 	t := text.Process(inputFilename, string(raw))
 
-	assembler := asm.New(flagIncludeDirs)
+	assembler := asm.New(flagIncludeDirs, )
 	for _, d := range flagDefines {
-		assembler.AddDefine(d, expr.NewConst(text.Pos{}, 1, 1))
+		assembler.AddDefine(d,)
 	}
-	assembler.AddDefine("PLATFORM", expr.NewStrConst(text.Pos{}, *flagPlatform))
+	assembler.SetDefaultPlatform(*flagPlatform)
 	assembler.Assemble(t)
 	errors := assembler.Errors()
 	if len(errors) > 0 {
