@@ -1,6 +1,11 @@
 # cbmasm
 
-`cbmasm` is an assembler for the Z80 and 6502 CPU family that supports local labels, macros, and conditional assembly.
+`cbmasm` is an assembler targeted primarily to the Commodore 128 that allows the programmer to switch between
+8510 and Z80 assembly code in a single source file. It supports Commodore's `prg` format natively, but can also
+generate code for pretty much anything that uses a MOS6502 or Z80 CPU.
+
+Besides that, it comes with all the features that you expect from a decent assembler: local labels, macros, as well as
+conditional assembly.
 
 ## Usage
 ```bash
@@ -9,6 +14,7 @@ cbmasm [flags] [inputfile] [outputfile]
 Supported flags are:
 - `-D value`: defined symbols; can be repeated
 - `-I value`: include paths; can be repeated
+- `-cpu string`: CPU to assemble code for. Supported values are: 6502, z80 (default "6502")
 - `-dump_labels`: If true, the labels will be printed. (default true)
 - `-listing`: If true, a listing is generated.
 - `-plain`: If true, the load address is not added to the generated code.
