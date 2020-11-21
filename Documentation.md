@@ -60,9 +60,9 @@ dbOp := ("<"|">") expr
       | basicDbOp
       | "scr" "(" basicDbOp { "," basicDbOp } ")" .
 
-basicDbOp := expr | string
+basicDbOp := expr .
 
-string := '"' { stringChar} '"'.
+string := '"' { stringChar} '"' .
 
 6502 mode:
 param := "#" ["<"|">"] expr

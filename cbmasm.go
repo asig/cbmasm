@@ -22,10 +22,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/asig/cbmasm/pkg/asm"
+	"github.com/asig/cbmasm/pkg/expr"
 	"github.com/asig/cbmasm/pkg/text"
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -63,15 +65,20 @@ func (f *pathListFlag) Set(value string) error {
 }
 
 var (
+	supportedPlatforms = []string{"c128", "c64"}
+
 	flagIncludeDirs pathListFlag
 	flagDefines     stringArrayFlag
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
 	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
 	flagListing     = flag.Bool("listing", false, "If true, a listing is generated.")
+	flagPlatform    = flag.String("platform", "c128", fmt.Sprintf("Target platform. Supported values are: %s", strings.Join(supportedPlatforms, ", ")))
 )
 
 func usage() {
-	errorOutput.Println("Usage: c128asm {-I includedir} {-D define} [-plain] [-dump_labels] [-listing] [inputfile] [outputfile] ")
+	errorOutput.Printf("Usage: %s [flags] [inputfile] [outputfile]\n", filepath.Base(os.Args[0]))
+	errorOutput.Println("Flags:")
+	flag.PrintDefaults()
 	os.Exit(1)
 }
 
@@ -116,16 +123,33 @@ func printListing(a *asm.Assembler) {
 	}
 }
 
-func main() {
+func init() {
+	flag.Usage = usage
 	flag.Var(&flagIncludeDirs, "I", "include paths; can be repeated")
 	flag.Var(&flagDefines, "D", "defined symbols; can be repeated")
 	flag.Parse()
-	args := flag.Args()
+
+	platformValid := false
+	for _, p := range supportedPlatforms {
+		if p == *flagPlatform {
+			platformValid = true
+			break
+		}
+	}
+	if !platformValid {
+		errorOutput.Printf("Unsupported platform %q. Valid platforms are: %s.", *flagPlatform, strings.Join(supportedPlatforms, ", "))
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	if len(flagIncludeDirs) == 0 {
 		// default to "." if no include dirs are set.
 		flagIncludeDirs = pathListFlag{"."}
 	}
+}
+
+func main() {
+	args := flag.Args()
 
 	inputFilename := "<stdin>"
 	outputFilename := "<stdout>"
@@ -163,7 +187,10 @@ func main() {
 	t := text.Process(inputFilename, string(raw))
 
 	assembler := asm.New(flagIncludeDirs)
-	assembler.AddDefines(flagDefines)
+	for _, d := range flagDefines {
+		assembler.AddDefine(d, expr.NewConst(text.Pos{}, 1, 1))
+	}
+	assembler.AddDefine("PLATFORM", expr.NewStrConst(text.Pos{}, *flagPlatform))
 	assembler.Assemble(t)
 	errors := assembler.Errors()
 	if len(errors) > 0 {

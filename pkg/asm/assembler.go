@@ -79,7 +79,7 @@ type ListingLine struct {
 type Assembler struct {
 	// "Constant" values; not reset before Assemble()
 	includePaths []string
-	defines      []string
+	defines      symbolTable
 
 	// All following fields are reset in Assemble()
 
@@ -118,12 +118,13 @@ type Assembler struct {
 func New(includePaths []string) *Assembler {
 	a := &Assembler{
 		includePaths: includePaths,
+		defines:      newSymbolTable(),
 	}
 	return a
 }
 
-func (a *Assembler) AddDefines(defines []string) {
-	a.defines = defines
+func (a *Assembler) AddDefine(name string, val expr.Node) {
+	a.defines.add(symbol{name: name, val: val, kind: symbolConst})
 }
 
 func (a *Assembler) Assemble(t text.Text) {
@@ -137,8 +138,10 @@ func (a *Assembler) Assemble(t text.Text) {
 	a.ListingLines = nil
 
 	a.symbols = newSymbolTable()
-	for _, d := range a.defines {
-		a.addSymbol(d, symbolConst, expr.NewConst(text.Pos{}, 1, 1))
+	for _, val := range a.defines.symbols() {
+		if err := a.addSymbol(val.name, val.kind, val.val); err != nil {
+			a.AddError(text.Pos{}, err.Error())
+		}
 	}
 
 	t = a.resolveIncludes(t)
@@ -882,16 +885,17 @@ func (a *Assembler) dbOp() []expr.Node {
 		// "scr" "(" basicDbOp { "," basicDbOp } ")"
 		a.nextToken()
 		a.match(scanner.LParen)
-		nodes := wrapWithUnaryOp(a.basicDbOp(), expr.ScreenCode)
+		n := a.basicDbOp()
+		nodes := []expr.Node{expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode)}
 		for a.lookahead.Type == scanner.Comma {
 			a.nextToken()
-			n2 := wrapWithUnaryOp(a.basicDbOp(), expr.ScreenCode)
-			nodes = append(nodes, n2...)
+			n = a.basicDbOp()
+			nodes = append(nodes, expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode))
 		}
 		a.match(scanner.RParen)
 		return nodes
 	default:
-		return a.basicDbOp()
+		return []expr.Node{a.basicDbOp()}
 	}
 }
 
@@ -903,21 +907,12 @@ func wrapWithUnaryOp(nodes []expr.Node, op expr.UnaryOp) []expr.Node {
 	return newNodes
 }
 
-func (a *Assembler) basicDbOp() []expr.Node {
-	p := a.lookahead.Pos
-	switch a.lookahead.Type {
-	case scanner.String:
-		str := a.lookahead.StrVal
-		a.nextToken()
-		var res []expr.Node
-		for _, c := range str {
-			n := expr.NewConst(p, int(c), 1)
-			res = append(res, expr.NewUnaryOp(p, n, expr.AsciiToPetscii))
-		}
-		return res
-	default:
-		return []expr.Node{a.expr(1, false)}
+func (a *Assembler) basicDbOp() expr.Node {
+	n := a.expr(1, true)
+	if n.Type() == expr.NodeType_String {
+		n = expr.NewUnaryOp(n.Pos(), n, expr.AsciiToPetscii)
 	}
+	return n
 }
 
 func containsKey(m map[scanner.TokenType]expr.BinaryOp, key scanner.TokenType) bool {
@@ -1018,7 +1013,7 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 		p := a.lookahead.Pos
 		str := a.lookahead.StrVal
 		if stringsAllowed {
-			node = expr.NewUnaryOp(p, expr.NewStrConst(p, str), expr.AsciiToPetscii)
+			node = expr.NewStrConst(p, str)
 		} else {
 			a.AddError(p, "Strings are not allowed")
 			node = expr.NewConst(p, 0, 1)
@@ -1032,7 +1027,7 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 			if s.val.IsResolved() {
 				switch s.val.Type() {
 				case expr.NodeType_Int:
-					node = expr.NewConst(p, s.val.Eval(), s.val.ResultSize())
+					node = expr.NewConst(p, s.val.Eval(), size)
 				case expr.NodeType_String:
 					if stringsAllowed {
 						node = expr.NewStrConst(p, s.val.EvalStr())
@@ -1096,6 +1091,14 @@ func (a *Assembler) emitNode(n expr.Node) {
 		a.AddError(a.scanner.LineStart(), "No .org specified")
 		a.section = NewSection(0, a)
 	}
+	if n.Type() == expr.NodeType_String {
+		str := n.EvalStr()
+		for _, b := range str {
+			a.section.Emit(byte(b & 0xff))
+		}
+		return
+	}
+
 	var val, size int
 	if !n.IsResolved() {
 		// register a patch, and emit 0 bytes
@@ -1105,10 +1108,11 @@ func (a *Assembler) emitNode(n expr.Node) {
 		a.checkRange(n)
 		val = n.Eval()
 	}
+	size = n.ResultSize()
 	if n.IsRelative() {
 		val = val - (a.section.PC() + 1)
+		size = 1
 	}
-	size = n.ResultSize()
 	a.emitted = a.emitted + size
 	for size > 0 {
 		a.section.Emit(byte(val & 0xff))

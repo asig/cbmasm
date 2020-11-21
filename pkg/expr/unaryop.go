@@ -24,9 +24,9 @@ import (
 )
 
 type UnaryOp struct {
-	transformation func(int) int
+	transformation    func(int) int
 	transformationStr func(string) string
-	size           func(Node) int
+	size              func(Node) int
 }
 
 var (
@@ -48,7 +48,14 @@ var (
 	}
 	ScreenCode = UnaryOp{
 		transformation: func(v int) int { return int(petToScreen[v&0xff]) },
-		size:           func(n Node) int { return 1 },
+		transformationStr: func(v string) string {
+			res := ""
+			for _, c := range v {
+				res = res + string(petToScreen[c&0xff])
+			}
+			return res
+		},
+		size: func(n Node) int { return n.ResultSize() },
 	}
 	AsciiToPetscii = UnaryOp{
 		transformation: func(v int) int { return int(ascToPet[v&0xff]) },
@@ -59,7 +66,7 @@ var (
 			}
 			return res
 		},
-		size:           func(n Node) int { return n.ResultSize() },
+		size: func(n Node) int { return n.ResultSize() },
 	}
 )
 
