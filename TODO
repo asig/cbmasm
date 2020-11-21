@@ -12,9 +12,8 @@
 [X] introduce "platform"
     [ ] only allow Z80 code when platform is C128
 [ ] .fail implementation:
-    [ ] Check for garbage after .fail
     [ ] allow comma separated list of messages
     [ ] Allow symbols in message
-[ ] turn "platform" into a directive
+[X] turn "platform" into a directive
     [ ] Allow override in the code only if no other directive (except macro def) has been executed
-[ ] store value of ".cpu" in symbol table
+[X] store value of ".cpu" in symbol table
