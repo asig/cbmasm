@@ -114,7 +114,7 @@ func printListing(a *asm.Assembler) {
 		for _, b := range bytes {
 			byteStrs = append(byteStrs, fmt.Sprintf("%02x", b))
 		}
-		for len(byteStrs) < 8 {
+		for len(byteStrs) < 5 {
 			byteStrs = append(byteStrs, "  ")
 		}
 		statusOutput.Printf("%04x | %s | %s\n", l.Addr, strings.Join(byteStrs, " "), strings.TrimSuffix(string(l.Line.Runes), "\n"))
