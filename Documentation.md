@@ -40,6 +40,7 @@ op := ".macro" [ident {"," ident }]
     | ".fail" string
     | ".equ" expr
     | ".org" expr
+    | ".align" expr
     | ".byte" dbOp {"," dbOp }
     | ".word" expr {"," expr }
     | ".reserve" expr ["," dbOp ]

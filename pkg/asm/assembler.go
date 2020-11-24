@@ -476,6 +476,19 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		} else {
 			a.section = NewSection(org, a)
 		}
+	case scanner.Align:
+		a.nextToken()
+		node := a.expr(2, false)
+		if !node.IsResolved() {
+			a.AddError(t.Pos, "Can't use forward declarations in .align")
+			return
+		}
+		n := node.Eval()
+		toAdd := n - (a.section.PC() % n)
+		for toAdd > 0 {
+			a.section.Emit(0)
+			toAdd = toAdd - 1
+		}
 	case scanner.Equ:
 		a.nextToken()
 		// label is equ name!

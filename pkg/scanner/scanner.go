@@ -75,6 +75,7 @@ const (
 	Word
 	Equ
 	Org
+	Align
 	Macro
 	Endm
 
@@ -97,6 +98,7 @@ var identToTokenType = map[string]TokenType{
 	".word":     Word,
 	".equ":      Equ,
 	".org":      Org,
+	".align": Align,
 	".macro":    Macro,
 	".endm":     Endm,
 }
@@ -145,6 +147,7 @@ var tokenTypeToString = map[TokenType]string{
 	Word:      ".word",
 	Equ:       ".equ",
 	Org:       ".org",
+	Align:".align",
 	Macro:     ".macro",
 	Endm:      ".endm",
 	Eol:       "EOL",
