@@ -1,4 +1,5 @@
-        .ifdef PLATFORM_C128
+
+        .if PLATFORM = "c128"
 
         ; BASIC header for Commodore 128
         .org $1c01
@@ -9,7 +10,7 @@ _next   .word 0              ; End of listing
 
         .else
 
-        .ifdef PLATFORM_C64
+        .if PLATFORM = "c64"
 
         ; BASIC header for Commodore 64
         .org $801
@@ -19,7 +20,7 @@ _next   .word 0              ; End of listing
 _next   .word 0              ; End of listing
 
         .else
-        .fail "Neither PLATFORM_C64 nor PLATFORM_C128 defined."
+        .fail "Unsupported platform."
         .endif
 
         .endif
