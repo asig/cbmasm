@@ -42,7 +42,7 @@ const (
 type symbol struct {
 	name string
 	kind symbolKind
-	typ symbolType
+	typ  symbolType
 	val  expr.Node // Only set for symbolKind in { symbolLabel, symbolConst }
 	m    *macro    // only set for symbolKind in { symbolMacro }
 }
@@ -74,7 +74,8 @@ func (t *symbolTable) get(name string) (*symbol, bool) {
 }
 
 func (t *symbolTable) remove(name string) {
-	delete(t.m, name)
+	n := strings.ToLower(name)
+	delete(t.m, n)
 }
 
 func (t *symbolTable) removeMatching(predicate func(*symbol) bool) {
