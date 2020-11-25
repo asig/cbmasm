@@ -1,17 +1,12 @@
-;PLATFORM    .equ "C64"
-
-PLATFORM_C128    .equ 1
-;PLATFORM_C64    .equ 1
-
         .include "macros.i"
         .include "vic.i"
 
 
 DEBUG_COL   .macro col
-            ;.ifdef DEBUG
+            .ifdef DEBUG
             lda col
             sta $d020
-            ;.endif
+            .endif
             .endm
 
 ptr1    .equ $fa ; zero page address used for memory indexing
@@ -27,7 +22,6 @@ rasterline5 .equ 50-4+20*8-20; Switch to LGREY
 rasterline6 .equ 50-4+20*8-15 ; Switch to GREY
 rasterline7 .equ 50-4+20*8-10 ; Switch to DGREY
 rasterline8 .equ 50-4+20*8 ; Switch to BLACK and fixed scroll
-rasterline9 .equ 50-4+21*8 ; Horizontal scroll
 
 vram    .equ    $400
 color_ram   .equ $d800
@@ -45,10 +39,10 @@ wait    .byte 1
 start:
         jsr init_random
         jsr clear_screen
-        jsr draw_scroller
+        ;jsr draw_scroller
         jsr install_irq
 
-        lda #0
+        lda #COL_BLACK
         sta $d021
         sta $d020
 
@@ -60,11 +54,6 @@ _w1     cmp wait
         beq _w1
         sta wait
 
-        DEBUG_COL #COL_YELLOW
-        jsr do_scrolltext
-        DEBUG_COL #COL_BLACK
-
-        jsr scroll_colors
         dex
         bne _l1
 
@@ -129,7 +118,7 @@ scroll_colors:
 _l2     lda (ptr1),y
         sta (ptr2),y
         dey
-        bne _l2
+        bpl _l2
         pla
         tax
         rts
@@ -216,7 +205,7 @@ _irqdispatch
         jmp _rasterline0
 
 _rasterline0
-        lda #8
+        lda #0
         sta $d016
 
         lda #%00010000
@@ -290,14 +279,10 @@ _rasterline8
         lda #%00010111
         sta $d011
 
-        lda #rasterline9
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline9
-        jmp _endirq
-
-_rasterline9
+        jsr do_scrolltext
         lda scrollx
         sta $d016
+        jsr scroll_colors
 
         lda #rasterline0
         sta $d012
