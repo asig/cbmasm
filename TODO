@@ -17,3 +17,8 @@
 [X] turn "platform" into a directive
     [ ] Allow override in the code only if no other directive (except macro def) has been executed
 [X] store value of ".cpu" in symbol table
+
+
+#BUGs
+[ ] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
+[ ] listing repeats macro line
