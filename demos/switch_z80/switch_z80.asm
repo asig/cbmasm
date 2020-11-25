@@ -42,11 +42,21 @@ z80code:
     LD A, $3F       ; load up the #$3f byte, for mmu cr
     LD ($FF00),A    ; set the mmu configuration register mirror with #$3f
     LD A, $53       ; dummy fill-byte seed.
-    LD ($0400),A    ; stash fill-byte at $0400, the location of standard 40x25 VIC-II text screen
-    LD HL, $0400    ; load HL with address value #$0400, prepwork for LDIR
-    LD DE, $0401    ; load DE with address value #$0401, prepwork for LDIR
+
+    ; Running the following loop directly in VRAM won't work. It will just fill the memory
+    ; with garbage. I have *no* idea why this is happening. Maybe the VIC and Z80 are competing
+    ; for RAM access? If you know, tell me!
+    LD ($C000),A    ; stash fill-byte at $0400, the location of standard 40x25 VIC-II text screen
+    LD HL, $C000    ; load HL with address value #$c000, prepwork for LDIR
+    LD DE, $C001    ; load DE with address value #$c001, prepwork for LDIR
     LD BC, $03FF    ; load BC with address value #$03FF (1023 decimal), prepwork for LDIR
     LDIR            ; repeat HL to DE, #$03FF times (re: fill the text screen with #$03FF bytes)
+
+    LD HL, $C000    ; load HL with address value #$c000, prepwork for LDIR
+    LD DE, $0400    ; load DE with address value #$0400, prepwork for LDIR
+    LD BC, $0400    ; load BC with address value #$0400 (1024 decimal), prepwork for LDIR
+    LDIR            ; repeat HL to DE, #$03FF times (re: fill the text screen with #$03FF bytes)
+
 
     JP $FFE0        ; jump to the bootlink routine in the Z-80 ROM, 8502 is switched on there.
     NOP             ; add one z80 NOP for safety.
