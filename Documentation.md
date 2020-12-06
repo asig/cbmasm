@@ -16,7 +16,10 @@ TODO
 
 Macros
 ======
-TODO
+- Can define local labels
+- Only see the local labels that are defined in the macro
+- all local labels need to be resolved at the end of the macro
+- can refer to global labels
 
 Conditional assembly
 ====================

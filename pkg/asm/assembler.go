@@ -631,10 +631,25 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 	// Get copy of macro with parameters substituted
 	t := text.Text{m.replaceParams(actParams)}
 
+	// remove (and save) all currently existing local labels
+	savedLocalLabels := a.symbols.removeMatching(func(s *symbol) bool {
+		return s.kind == symbolLabel && isLocalLabel(s.name)
+	})
+
+	// Instantiate the macro
 	savedErrorModifier := a.errorModifier
 	a.errorModifier = &macroInvocation{callPos: callPos}
 	a.assembleText(t)
 	a.errorModifier = savedErrorModifier
+
+	// Remove the local labels that were defined by the macro
+	a.reportUnresolvedSymbols(a.lookahead.Pos, isLocalLabel)
+	a.clearLocalLabels()
+
+	// Reinstate the local labels before macro instantiation
+	for _, sym := range savedLocalLabels {
+		a.symbols.add(sym)
+	}
 }
 
 func handleZ80Mnemonic(a *Assembler, t scanner.Token) {

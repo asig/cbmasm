@@ -88,9 +88,11 @@ l:
 
 func TestAssembler_assemble(t *testing.T) {
 	tests := []struct {
-		name string
-		text string
-		want []byte
+		name         string
+		text         string
+		wantErrors   []errors.Error
+		wantWarnings []errors.Error
+		want         []byte
 	}{
 		{
 			name: "Recursive symbol definition",
@@ -211,19 +213,64 @@ foo .equ 1
 `,
 			want: []byte{0xa9, 0x41},
 		},
+
+		{
+			name: "macros - instantiation",
+			text: ` .org 0
+m	.macro param
+	lda param
+	.endm
+
+	m #0
+	m $1
+`,
+			want: []byte{0xa9, 0x00, 0xad, 0x01, 0x00},
+		},
+
+		{
+			name: "macros - local labels",
+			text: ` .org 0
+m	.macro
+_l	nop
+	beq _l
+	.endm
+
+	m
+	m
+`,
+			want: []byte{0xea, 0xf0, 0xfd, 0xea, 0xf0, 0xfd},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assembler := New([]string{}, "6502", "c128", []string{})
 			assembler.Assemble(text.Process("", test.text))
+
 			errs := assembler.Errors()
-			if len(errs) != 0 {
-				t.Errorf("Got %+v, want 0 errs", errs)
+			if len(errs) != len(test.wantErrors) {
+				t.Errorf("Got %d, want %d errs", len(errs), len(test.wantErrors))
+			} else {
+				for i := range errs {
+					got := errs[i]
+					want := test.wantErrors[i]
+					if got != want {
+						t.Errorf("Error %d: got %+v, want %+v", i+1, got, want)
+					}
+				}
 			}
+
 			warnings := assembler.Warnings()
-			if len(warnings) != 0 {
-				t.Errorf("Got %+v, want 0 warnings", errs)
+			if len(warnings) != len(test.wantWarnings) {
+				t.Errorf("Got %d, want %d warnings", len(errs), len(test.wantWarnings))
+			} else {
+				for i := range warnings {
+					got := warnings[i]
+					want := test.wantWarnings[i]
+					if got != want {
+						t.Errorf("Warning %d: got %+v, want %+v", i+1, got, want)
+					}
+				}
 			}
 			got := assembler.GetBytes()
 			if bytes.Compare(got, test.want) != 0 {

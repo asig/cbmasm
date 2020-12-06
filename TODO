@@ -20,5 +20,5 @@
 
 
 #BUGs
-[ ] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
+[X] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
 [ ] listing repeats macro line

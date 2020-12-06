@@ -78,12 +78,15 @@ func (t *symbolTable) remove(name string) {
 	delete(t.m, n)
 }
 
-func (t *symbolTable) removeMatching(predicate func(*symbol) bool) {
+func (t *symbolTable) removeMatching(predicate func(*symbol) bool) []symbol {
+	var removed []symbol
 	for key, val := range t.m {
 		if predicate(val) {
+			removed = append(removed, *val)
 			delete(t.m, key)
 		}
 	}
+	return removed
 }
 
 func (t *symbolTable) symbols() []*symbol {
