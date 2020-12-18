@@ -1,5 +1,4 @@
 #TODOs
-
 [X] Add defines on the command line
 [X] Add Z80 assembler for C128 mode
 [X] Add characters literals
@@ -21,4 +20,4 @@
 
 #BUGs
 [X] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
-[ ] listing repeats macro line
+[X] listing repeats macro line

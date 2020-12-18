@@ -231,8 +231,10 @@ func (a *Assembler) assembleText(t text.Text) {
 		startPc := a.section.PC()
 		a.emitted = 0
 		a.beginLine(line)
-		a.processLine()
-		a.ListingLines = append(a.ListingLines, ListingLine{startPc, a.emitted, line})
+		addToLine := a.processLine()
+		if addToLine {
+			a.ListingLines = append(a.ListingLines, ListingLine{startPc, a.emitted, line})
+		}
 	}
 }
 
@@ -281,9 +283,11 @@ func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
 	return t, labelPos, label
 }
 
-func (a *Assembler) processLine() {
-	t, labelPos, label := a.maybeLabel()
+func (a *Assembler) processLine() (addToListing bool) {
+	// By default, let's add the line to the listing
+	addToListing = true
 
+	t, labelPos, label := a.maybeLabel()
 	errs := len(a.Errors())
 	if _, found := conditionalTokens[t.Type]; found {
 		a.maybeAddLabel(labelPos, label)
@@ -343,7 +347,7 @@ func (a *Assembler) processLine() {
 		}
 		switch a.state {
 		case stateAssemble:
-			a.assembleLine(t, labelPos, label)
+			addToListing = a.assembleLine(t, labelPos, label)
 		case stateRecordMacro:
 			a.recordMacro()
 		}
@@ -352,6 +356,7 @@ func (a *Assembler) processLine() {
 		// Only match EOL if there were no errors reported.
 		a.matchEol()
 	}
+	return addToListing
 }
 
 func (a *Assembler) matchEol() {
@@ -367,11 +372,13 @@ func (a *Assembler) maybeAddLabel(labelPos text.Pos, label string) {
 	a.addLabel(labelPos, label)
 }
 
-func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label string) {
+func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label string) (addToListing bool) {
+	addToListing = true // By default, add the line to the listing
+
 	if t.Type == scanner.Semicolon || t.Type == scanner.Eol {
 		// Empty line. Add a label if necessary, and bail out.
 		a.maybeAddLabel(labelPos, label)
-		return
+		return true
 	}
 
 	// Label checks
@@ -564,14 +571,15 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 				return
 			}
 			a.handleMacroInstantiation(sym.m, t.Pos)
+			addToListing = false // Don't add the macro call itself
 		} else {
 			// must be a mnemonic
 			a.mnemonicHandler(a, t)
 		}
 	default:
 		a.AddError(t.Pos, "Identifier or directive expected")
-		return
 	}
+	return addToListing
 }
 
 func (a *Assembler) setCPU(cpu string) {
