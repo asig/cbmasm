@@ -185,6 +185,7 @@ func (a *Assembler) Assemble(t text.Text) {
 		a.AddError(p, ".endm expected")
 	}
 	a.reportUnresolvedSymbols(p, func(string) bool { return true })
+	a.reportUnresolvedPatches(p, func(string) bool { return true })
 	if a.assemblyEnabled.len() > 1 {
 		a.AddError(p, ".endif expected")
 	}
@@ -650,14 +651,66 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 	a.assembleText(t)
 	a.errorModifier = savedErrorModifier
 
-	// Remove the local labels that were defined by the macro
-	a.reportUnresolvedSymbols(a.lookahead.Pos, isLocalLabel)
-	a.clearLocalLabels()
-
-	// Reinstate the local labels before macro instantiation
-	for _, sym := range savedLocalLabels {
-		a.symbols.add(sym)
+	// Remove the local labels that were defined by the macro, and complain about missing ones.
+	// Ignore unresolved patches to local labels that were passed in or were created outside the macros.
+	passedInLocalLabels := make(map[string]bool)
+	for _, p := range actParams {
+		for _, l := range extractLocalLabels(p) {
+			passedInLocalLabels[l] = true
+		}
 	}
+	localLabelsExceptPassedIn := func(l string) bool {
+		if !isLocalLabel(l) {
+			return false
+		}
+		if _, found := passedInLocalLabels[l]; found {
+			return false
+		}
+		return true
+	}
+	a.reportUnresolvedSymbols(a.lookahead.Pos, localLabelsExceptPassedIn)
+
+	createdInMacro := make(map[string]bool)
+	for _, s := range a.symbols.symbols() {
+		if s.kind == symbolLabel && isLocalLabel(s.name) {
+			createdInMacro[s.name] = true
+		}
+	}
+	localLabelsCreatedInMacro := func(l string) bool {
+		_, found := createdInMacro[l]
+		return found
+	}
+	a.reportUnresolvedPatches(a.lookahead.Pos, localLabelsCreatedInMacro)
+	a.clearLocalLabels(localLabelsExceptPassedIn)
+
+	// Reinstate the local labels before macro instantiation, resolve potential patches that were added by using
+	// passed-in labels.
+	for _, sym := range savedLocalLabels {
+		a.addSymbol(sym.name, sym.kind, sym.val)
+	}
+}
+
+type emptyErrorSink int
+
+func (e *emptyErrorSink) AddError(pos text.Pos, message string, args ...interface{}) {
+}
+
+func extractLocalLabels(actParam string) []string {
+	// Simple heuristic: Ignore everything that is not a local label/Replace all non-label chars with a space, collect all the labels
+	var labels []string
+	text := text.Process("", actParam)
+	var sink emptyErrorSink
+	s := scanner.New(text.Lines[0], &sink)
+	for {
+		t := s.Scan()
+		if t.Type == scanner.Eol {
+			break
+		}
+		if t.Type == scanner.Ident && isLocalLabel(t.StrVal) {
+			labels = append(labels, t.StrVal)
+		}
+	}
+	return labels
 }
 
 func handleZ80Mnemonic(a *Assembler, t scanner.Token) {
@@ -1238,17 +1291,12 @@ func (a *Assembler) addLabel(pos text.Pos, label string) {
 
 	if !isLocalLabel(label) {
 		a.reportUnresolvedSymbols(pos, isLocalLabel)
-		a.clearLocalLabels()
+		a.clearLocalLabels(isLocalLabel)
 	}
 }
 
-func (a *Assembler) clearLocalLabels() {
-	a.symbols.removeMatching(func(sym *symbol) bool { return isLocalLabel(sym.name) })
-	for label := range a.patchesPerLabel {
-		if isLocalLabel(label) {
-			delete(a.patchesPerLabel, label)
-		}
-	}
+func (a *Assembler) clearLocalLabels(filterFunc func(string) bool) {
+	a.symbols.removeMatching(func(sym *symbol) bool { return filterFunc(sym.name) })
 }
 
 func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(string) bool) {
@@ -1275,6 +1323,10 @@ func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(s
 			}
 		}
 	}
+}
+
+func (a *Assembler) reportUnresolvedPatches(errorPos text.Pos, filterFunc func(string) bool) {
+	seen := make(map[string]bool)
 	for label := range a.patchesPerLabel {
 		if !filterFunc(label) {
 			continue

@@ -101,7 +101,7 @@ t1 .equ t2
 t2 .equ t3
 t3 .equ t4
 t4 .equ t5
-    jmp t4
+   jmp t4
 t5 .equ $1234
 `,
 			want: []byte{0x4c, 0x34, 0x12},
@@ -111,9 +111,9 @@ t5 .equ $1234
 			name: "mixed symbols and labels",
 			text: `   .org 0
 sym .equ label
-    nop
+   nop
 label inx
-    jmp sym
+   jmp sym
 `,
 			want: []byte{0xea, 0xe8, 0x4c, 0x01, 0x00},
 		},
@@ -122,14 +122,14 @@ label inx
 			name: "local labels",
 			text: `   .org 0
 l1    jmp _l1
-      nop
+     nop
 _l1   lda #0
-      nop
-      jmp _l1
+     nop
+     jmp _l1
 l2    nop
-      jmp _l1
-      nop
-_l1   brk   
+     jmp _l1
+     nop
+_l1   brk
 `,
 			want: []byte{0x4c, 0x04, 0x00, 0xea, 0xa9, 0x00, 0xea, 0x4c, 0x04, 0x00, 0xea, 0x4c, 0x0f, 0x00, 0xea, 0x00},
 		},
@@ -239,6 +239,35 @@ _l	nop
 	m
 `,
 			want: []byte{0xea, 0xf0, 0xfd, 0xea, 0xf0, 0xfd},
+		},
+		{
+			name: "macros - local labels are passed in",
+			text: ` .org 0
+m	.macro dest
+	jmp dest
+	.endm
+
+start:
+	m _l0+1
+	m _l0+2
+_l0 nop
+`,
+			want: []byte{0x4c, 0x07, 0x00, 0x4c, 0x08, 0x00, 0xea},
+		},
+		{
+			name: "macros - don't complaing about existing patches",
+			text: ` .org 0
+m	.macro dest
+	jmp dest
+	.endm
+
+start:
+	jmp _l0
+	m _l0+1
+	m _l0+2
+_l0 nop
+`,
+			want: []byte{0x4c, 0x09, 0x00, 0x4c, 0x0a, 0x00, 0x4c, 0x0b, 0x00, 0xea},
 		},
 	}
 
