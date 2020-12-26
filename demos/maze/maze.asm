@@ -1,9 +1,3 @@
-wait_line .macro line
-        lda #line
-_l1     cmp $d012
-        bne _l1
-        .endm
-
         .include "macros.i"
         .include "vic.i"
 
@@ -48,9 +42,9 @@ start:
         sta $ff00
         .endif
 
-        ;jsr songCopy
-        ;jsr songInit
-        jsr init_random
+        jsr songCopy
+        jsr songInit
+        ;jsr init_random
         jsr clear_screen
         jsr install_irq
 
@@ -58,13 +52,21 @@ start:
         sta $d021
         sta $d020
 
-
 loop:
 
-        lda #2      ; wait 3 interrupts ...
+        lda #1      ; wait 1 interrupts ...
         sta irqcnt
 _w      lda irqcnt
         bne _w
+
+        jsr songPlay
+
+        lda #1      ; wait another 1 interrupts ...
+        sta irqcnt
+_w2     lda irqcnt
+        bne _w2
+
+        jsr songPlay
 
         ; soft scroll the maze
         ldx scrolly
@@ -142,11 +144,10 @@ draw_scroller:
         SET16   ptr2, scroll_line
         ldy #38
 _l      lda (ptr1),y
-        cmp #$ff
         bne _l2
-        ldx #0
-        stx scroll_pos
-        stx scroll_pos+1
+        ; A contains 0 if we end up here
+        sta scroll_pos
+        sta scroll_pos+1
         jmp _l3
 _l2     sta (ptr2),y
 _l3     dey
@@ -155,7 +156,7 @@ _l3     dey
 
 
 scroll_pos  .word 0
-scroll_text .byte scr("                                      hello world, welcome to the awesome maze!!!!   and one and two and three and four and RESET!                                      "),$ff
+scroll_text .byte scr("                                      hello world, welcome to the awesome maze!!!!   and one and two and three and four and RESET!                                      "),0
 colofs  .byte 7
 scroll_cols
         .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
