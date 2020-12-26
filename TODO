@@ -21,3 +21,4 @@
 #BUGs
 [X] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
 [X] listing repeats macro line
+[X] Macros report local labels as undefined if they're passed in as a param
