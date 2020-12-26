@@ -1,3 +1,9 @@
+wait_line .macro line
+        lda #line
+_l1     cmp $d012
+        bne _l1
+        .endm
+
         .include "macros.i"
         .include "vic.i"
 
@@ -13,21 +19,21 @@ ptr1    .equ $fa ; zero page address used for memory indexing
 ptr2    .equ $fc ; zero page address used for memory indexing
 
 
-rasterline0 .equ 30 ; set vscroll
-rasterline1 .equ 50 ; Switch to DGREY
-rasterline2 .equ 60 ; Switch to GREY
-rasterline3 .equ 65 ; Switch to LGREY
-rasterline4 .equ 70 ; Switch to WHITE
-rasterline5 .equ 50-4+20*8-20; Switch to LGREY
-rasterline6 .equ 50-4+20*8-15 ; Switch to GREY
-rasterline7 .equ 50-4+20*8-10 ; Switch to DGREY
-rasterline8 .equ 50-4+20*8 ; Switch to BLACK and fixed scroll
+rasterline0 .equ 30             ; set vscroll
+rasterline1 .equ 50             ; Switch to DGREY
+rasterline2 .equ 60             ; Switch to GREY
+rasterline3 .equ 65             ; Switch to LGREY
+rasterline4 .equ 70             ; Switch to WHITE
+rasterline5 .equ 50-4+20*8-20   ; Switch to LGREY
+rasterline6 .equ 50-4+20*8-15   ; Switch to GREY
+rasterline7 .equ 50-4+20*8-10   ; Switch to DGREY
+rasterline8 .equ 50-4+20*8      ; Switch to BLACK, music, and fixed scroll
 
-vram    .equ    $400
-color_ram   .equ $d800
+vram            .equ    $400
+color_ram       .equ $d800
 
-last_line   .equ vram+19*40
-scroll_line  .equ vram+22*40
+last_line       .equ vram+19*40
+scroll_line     .equ vram+22*40
 scroll_line_col .equ color_ram+22*40
 
         .include "startup.i"
@@ -35,11 +41,17 @@ scroll_line_col .equ color_ram+22*40
 
 scrollx .byte 0
 scrolly .byte 0
-wait    .byte 1
+irqcnt  .byte 0
 start:
+        .if PLATFORM = "c128"
+        lda #$3e  ; All RAM, except I/O range at $d000
+        sta $ff00
+        .endif
+
+        ;jsr songCopy
+        ;jsr songInit
         jsr init_random
         jsr clear_screen
-        ;jsr draw_scroller
         jsr install_irq
 
         lda #COL_BLACK
@@ -48,32 +60,28 @@ start:
 
 
 loop:
-        ldx #2      ; wait 3 times ...
-_l1     lda #1      ; ... for raster line 250
-_w1     cmp wait
-        beq _w1
-        sta wait
 
-        dex
-        bne _l1
+        lda #2      ; wait 3 interrupts ...
+        sta irqcnt
+_w      lda irqcnt
+        bne _w
 
         ; soft scroll the maze
         ldx scrolly
         dex
-        bmi hard_scroll
+        bmi _hard_scroll
         stx scrolly
-        ;lda #%00010000
-        ;ora scrolly
-        ;sta $d011
-        jmp end_scroll
-hard_scroll:
+        jmp _end_scroll
+_hard_scroll:
+        DEBUG_COL #COL_LBLUE
         lda #7
         sta scrolly
         ;ora #%00010000
         ;sta $d011
         jsr scroll_up_fast
         jsr generate_line
-end_scroll
+        DEBUG_COL #COL_BLACK
+_end_scroll
         jmp loop
 
 
@@ -200,7 +208,6 @@ irq:
         sta $d019   ; Acknowledge interrupt
 
         ; dispatcher if-elses is way too slow. better use self-modifying code.
-
 _irqdispatch
         jmp _rasterline0
 
@@ -286,8 +293,7 @@ _rasterline8
 
         lda #rasterline0
         sta $d012
-        lda #0
-        sta wait
+        dec irqcnt
         SET16 _irqdispatch+1, _rasterline0
 _endirq
 irq_chain:
@@ -476,5 +482,9 @@ init_random:
     lda #$80  ; noise waveform, gate bit off
     sta $D412 ; voice 3 control register
     rts
+
+        ; Use tools/sidconv to convert a sid file to asm source
+        .include "songdata.i"
+songdata_end:
 
 
