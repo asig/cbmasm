@@ -134,6 +134,20 @@ _l1   brk
 			want: []byte{0x4c, 0x04, 0x00, 0xea, 0xa9, 0x00, 0xea, 0x4c, 0x04, 0x00, 0xea, 0x4c, 0x0f, 0x00, 0xea, 0x00},
 		},
 
+		{
+			name: "labels - unresolved",
+			text: `   .org 0
+     jmp l
+     jmp l
+     nop
+`,
+			want: []byte{},
+			wantErrors: []errors.Error{
+				{text.Pos{Filename: "", Line: 2, Col: 10}, "Undefined label \"l\""},
+				{text.Pos{Filename: "", Line: 3, Col: 10}, "Undefined label \"l\""},
+			},
+		},
+
 		// TODO add test for unresolved local labels
 
 		{
@@ -301,9 +315,11 @@ _l0 nop
 					}
 				}
 			}
-			got := assembler.GetBytes()
-			if bytes.Compare(got, test.want) != 0 {
-				t.Errorf("Got %s, want %s", toString(got), toString(test.want))
+			if len(test.wantErrors) == 0 {
+				got := assembler.GetBytes()
+				if bytes.Compare(got, test.want) != 0 {
+					t.Errorf("Got %s, want %s", toString(got), toString(test.want))
+				}
 			}
 		})
 	}

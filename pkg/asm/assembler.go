@@ -1326,14 +1326,12 @@ func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(s
 }
 
 func (a *Assembler) reportUnresolvedPatches(errorPos text.Pos, filterFunc func(string) bool) {
-	seen := make(map[string]bool)
-	for label := range a.patchesPerLabel {
+	for label, patches := range a.patchesPerLabel {
 		if !filterFunc(label) {
 			continue
 		}
-		if !seen[label] {
-			a.AddError(errorPos, "Undefined label %q", label)
-			seen[label] = true
+		for _, p := range patches {
+			a.AddError(p.node.Pos(), "Undefined label %q", label)
 		}
 	}
 }
