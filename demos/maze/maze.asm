@@ -44,7 +44,7 @@ start:
 
         jsr songCopy
         jsr songInit
-        ;jsr init_random
+        jsr init_random
         jsr clear_screen
         jsr install_irq
 
@@ -358,10 +358,10 @@ _l2:
 generate_line:
         ; set addr to beginning of screen
         SET16 ptr1, last_line
-        ldy #39 ; 40 characters
-        clc     ; make sure carry is not set
-_l      lda $D41B ; load random value
-        and #1    ; limit to 0,1
+        ldy #39     ; 39 characters
+_l      jsr random  ; load random value
+        and #1      ; limit to 0,1
+        clc
         adc #205
 _addr   sta (ptr1),y
         dey
@@ -474,18 +474,29 @@ scroll_up_fast:
         copy_line 19
         rts
 
-; From https://www.atarimagazines.com/compute/issue72/random_numbers.php
-
+; from https://gist.github.com/bhickey/0de228c02cc60b5965582d2d946d8c38,
+; based on http://www.retroprogramming.com/2017/07/xorshift-pseudorandom-numbers-in-z80.html
 init_random:
-    lda #$FF  ; maximum frequency value
-    sta $D40E ; voice 3 frequency low byte
-    sta $D40F ; voice 3 frequency high byte
-    lda #$80  ; noise waveform, gate bit off
-    sta $D412 ; voice 3 control register
-    rts
+        lda $d012   ; Initialize rnd with current rasterline
+        bne _l      ; but make sure we don't use 0.
+        lda #1
+_l      sta rndval
+
+random:
+        lda rndval
+        asl a
+        eor rndval
+        sta rndval
+        lsr a
+        eor rndval
+        sta rndval
+        asl a
+        asl a
+        eor rndval
+        sta rndval
+        rts
+rndval: .reserve 1
+
 
         ; Use tools/sidconv to convert a sid file to asm source
         .include "songdata.i"
-songdata_end:
-
-
