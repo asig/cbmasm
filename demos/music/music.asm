@@ -20,7 +20,6 @@ COL1    .equ COL_LGREEN
         jsr songCopy
         jsr songInit
 
-
 loop
         wait_line 70
         lda #COL1
