@@ -1,87 +1,96 @@
-Overview
-========
+# Overview
 
-Labels
-======
+`cbmasm`'s input is line based. A line typically consists of an optional label, a directive or a mnenonic, parameters,
+and an optional comment.
+
+A typical line could look like this:
+
+```
+wait:    cmp $d012 ; compare current vertical line pos
+```                                                   
+
+# Labels
 Labels need to terminate with ":" unless they start at the beginning of the line.
 
-Local labels
-------------
+## Local labels
 A local label is a label that starts with an underscore (`_`).
 All local labels are only visible (and need to be resolved) before the next non-local label.
 
 Local labels in macros are not visible outside the macro. 
 
-Assembler directives
-====================
+# Constants
+TODO
 
-Macro directives
---------------------
-`.macro` and `.endm` are used to define macros.
+# Assembler directives
 
-Directives for conditional assembly
------------------------------------
+## Macros
+
+Macros allow you to combine and parametrize often used sequences of operations and instantiate them at a later time. 
+The macro's parameters are just text placeholders that will be replaced with argument's "raw" text when instantiated.
+Together will conditional assembly (see below), they provide a powerful tool to simplify your assembler sources.
+
+### Labels in macros
+Macros can define local labels that are only valid within the macro. Only global labels and local labels that are 
+defined in the macro (or passed as an argument) are visible. All local labels that were not passed in need to be 
+resolved at the end of the macro.  
+
+### `.macro`
+The `.macro` directive starts the macro recording. The line needs to have a label that will be used as the macro's 
+name. Optionally, it can have parameters. 
+
+All lines follow the `.macro` line are copied into the macro buffer until a line with `.endm` is reached.
+
+Macros can not be nested.
+
+Example:
+```
+set16   .macro addr, val ; Set a 16bit value
+        lda #<(val)   ; Low byte. Use ( and ) so that complicated expressions can be passed
+        sta addr
+        lda #>(val)   ; High  byte.
+        sta addr+1
+        .endm
+```
+
+## Conditional assembly
 Conditional assembly is controlled by `.ifdef`, `.ifndef`, `.if`, `.else`, `.endif`.
 
-`.include`
-----------
+## Other directives
+
+### `.include`
 TODO
 
-`.incbin`
----------
+### `.incbin`
 TODO
 
-`.fail`
--------
+### `.fail`
 TODO
 
-`.equ`
-------
+### `.equ`
 TODO
 
-`.org`
-------
+### `.org`
 TODO
 
-`.align`
--------
+### `.align`
 TODO
 
-`.byte`
--------
+### `.byte`
 TODO
 
-`.word`
--------
+### `.word`
 TODO
 
-`.reserve`
-----------
+### `.reserve`
 TODO
 
-`.cpu`
-------
+### `.cpu`
 TODO
 
-`.platform`
------------
+### `.platform`
 TODO
 
-Macros
-======
-
-- Can define local labels
-- Only see the local labels that are defined in the macro
-- all local labels need to be resolved at the end of the macro
-- can refer to global labels
-
-Conditional assembly
-====================
-
-TODO
-
-Syntax
-======
+# Syntax
 
 ```
 line := [ident[":"]] [op] [";" comment]
