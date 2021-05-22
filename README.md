@@ -7,6 +7,8 @@ It supports Commodore's `prg` format natively, but can also generate code for pr
 or Z80 CPU. Besides that, `cbmasm` comes with all the features that you expect from a decent assembler: local labels,
 macros, conditional assembly, and many more.
 
+It does not support illegal 6510 operations.
+
 ## Usage
 ```bash
 cbmasm [flags] [inputfile] [outputfile]
@@ -27,7 +29,7 @@ If `inputfile` and `outputfile` are not given, `cbmasm` reads from standard inpu
 The assumber starts in 6502 mode. By default, the generated data starts with the load address, conforming to Commodore's
 "prg" format. If the `-plain` flag is set, the load address is suppressed.
 
-For more details, read the [docs](Documentation.md)
+For more details, read the [docs](Documentation.md).
 
 ## Building
 To build `cbmasm`, just run the following command in the projects rood directory:
