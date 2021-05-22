@@ -1,6 +1,27 @@
+; Copyright (c) 2021 Andreas Signer <asigner@gmail.com>
+;
+; This file is part of cbmasm.
+;
+; cbmasm is free software: you can redistribute it and/or
+; modify it under the terms of the GNU General Public License as
+; published by the Free Software Foundation, either version 3 of the
+; License, or (at your option) any later version.
+;
+; cbmasm is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+; GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with cbmasm.  If not, see <http://www.gnu.org/licenses/>.
+;
+
+
+; This small intro is inspired by the famous maze generator
+; 10 PRINT CHR$(205.5+RND(1));:GOTO 10
+
         .include "macros.i"
         .include "vic.i"
-
 
 DEBUG_COL   .macro col
             .ifdef DEBUG
@@ -12,7 +33,6 @@ DEBUG_COL   .macro col
 ptr1    .equ $fa ; zero page address used for memory indexing
 ptr2    .equ $fc ; zero page address used for memory indexing
 
-
 rasterline0 .equ 30             ; set vscroll
 rasterline1 .equ 50             ; Switch to DGREY
 rasterline2 .equ 60             ; Switch to GREY
@@ -21,7 +41,7 @@ rasterline4 .equ 70             ; Switch to WHITE
 rasterline5 .equ 50-4+20*8-20   ; Switch to LGREY
 rasterline6 .equ 50-4+20*8-15   ; Switch to GREY
 rasterline7 .equ 50-4+20*8-10   ; Switch to DGREY
-rasterline8 .equ 50-4+20*8      ; Switch to BLACK, music, and fixed scroll
+rasterline8 .equ 50-4+20*8      ; Switch to BLACK
 
 vram            .equ    $400
 color_ram       .equ $d800
