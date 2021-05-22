@@ -16,7 +16,5 @@ COL_LGREEN	.equ $0D
 COL_LBLUE	.equ $0E
 COL_LGREY	.equ $0F
 
-
-
 VIC_BASE .equ $d000
 
