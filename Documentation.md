@@ -123,7 +123,7 @@ macroname := ident .
                     
 actmacroparam := ["#" ["<"|">"]] expr .
 
-relOp := ["==" | "!=" | "<=" | "<" | ">=" | >"] .
+relOp := ["=" | "!=" | "<=" | "<" | ">=" | >"] .
 
 dbOp := ("<"|">") expr 
       | basicDbOp
