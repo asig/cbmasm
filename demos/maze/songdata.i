@@ -6,26 +6,6 @@
 
 songInit:	.equ $41ed
 songPlay:	.equ $4004
-songCopy:
-        lda #0
-        sta $fa
-        sta $fc
-        lda #>songdata
-        sta $fb
-        lda #$40
-        sta $fd
-        ldx #2
-_l1     ldy #0
-_l2     lda ($fa),y
-        sta ($fc),y
-        iny
-        bne _l2
-        inc $fb
-        inc $fd
-        dex
-        bne _l1
-        rts
-        .align 256
 songdata:
         .reserve 1
         .byte $4c, $07, $40, $4c, $b7, $40, $a2, $00, $a9, $01, $85, $80, $8a, $a8, $a5, $80
