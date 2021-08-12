@@ -33,7 +33,7 @@ func (e *errorSink) AddError(pos text.Pos, message string, args ...interface{}) 
 	e.e = append(e.e, errors.Error{pos, message})
 }
 
-func TestScanner_Scan_numbers(t *testing.T) {
+func TestScanner_Scan_integers(t *testing.T) {
 	tests := []struct {
 		name string
 		text text.Line
@@ -65,11 +65,38 @@ func TestScanner_Scan_numbers(t *testing.T) {
 			errors := errorSink{}
 			scanner := New(test.text, &errors)
 			got := scanner.Scan()
-			if got.Type != Number {
-				t.Errorf("got token type %s, expected %s", got.Type, Number)
+			if got.Type != Integer {
+				t.Errorf("got token type %s, expected %s", got.Type, Integer)
 			}
 			if got.IntVal != test.want {
 				t.Errorf("got %d, expected %d", got.IntVal, test.want)
+			}
+		})
+	}
+}
+
+func TestScanner_Scan_floats(t *testing.T) {
+	tests := []struct {
+		name string
+		text text.Line
+		want float32
+	}{
+		{
+			name: "Float",
+			text: text.Process("filename", "123.456").Lines[0],
+			want: 123.456,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			errors := errorSink{}
+			scanner := New(test.text, &errors)
+			got := scanner.Scan()
+			if got.Type != Float {
+				t.Errorf("got token type %s, expected %s", got.Type, Float)
+			}
+			if got.FloatVal != test.want {
+				t.Errorf("got %f, expected %f", got.FloatVal, test.want)
 			}
 		})
 	}

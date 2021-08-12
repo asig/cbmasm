@@ -21,7 +21,6 @@ package expr
 import (
 	"fmt"
 	"github.com/asig/cbmasm/pkg/errors"
-
 	"github.com/asig/cbmasm/pkg/text"
 )
 
@@ -89,8 +88,9 @@ func (n *BinaryOpNode) Eval() int {
 		panic("Can't evaluate non-const expr node")
 	}
 	if n.Type() != NodeType_Int {
-		panic("Can't Eval() a string node")
+		panic("Can't Eval() a string or float node")
 	}
+
 	if n.left.Type() == NodeType_Int {
 		l := n.left.Eval()
 		r := n.right.Eval()
@@ -146,6 +146,44 @@ func (n *BinaryOpNode) Eval() int {
 	panic(fmt.Sprintf("BinaryOp %d not supported for strings", n.op))
 }
 
+func (n *BinaryOpNode) EvalFloat() float64 {
+	if !n.IsResolved() {
+		panic("Can't evaluate non-const expr node")
+	}
+	if n.Type() != NodeType_Float {
+		panic("Can't EvalFloat() a non-float node")
+	}
+
+	var l, r float64
+
+	switch n.left.Type() {
+	case NodeType_Int:
+		l = float64(n.left.Eval())
+	case NodeType_Float:
+		l = n.left.EvalFloat()
+	default:
+		panic("Left side is neither int nor float")
+	}
+	switch n.right.Type() {
+	case NodeType_Int:
+		r = float64(n.right.Eval())
+	case NodeType_Float:
+		r = n.right.EvalFloat()
+	default:
+		panic("Right side is neither int nor float")
+	}
+	switch n.op {
+	case Add:
+		return l + r
+	case Sub:
+		return l - r
+	case Mul:
+		return l * r
+	default:
+		panic(fmt.Sprintf("Unsupported operation %d", n.op))
+	}
+}
+
 func (n *BinaryOpNode) EvalStr() string {
 	panic("Can't evaluate BinaryOp node as string")
 }
@@ -188,5 +226,8 @@ func (n *BinaryOpNode) CheckRange(sink errors.Sink) {
 }
 
 func (n *BinaryOpNode) Type() NodeType {
+	if n.left.Type() == NodeType_Float || n.right.Type() == NodeType_Float {
+		return NodeType_Float
+	}
 	return NodeType_Int
 }

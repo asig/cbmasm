@@ -24,10 +24,16 @@ import (
 )
 
 type NodeType int
+
 const (
 	NodeType_Int = iota
+	NodeType_Float
 	NodeType_String
 )
+
+func (n NodeType) IsNumeric() bool {
+	return n == NodeType_Int || n == NodeType_Float
+}
 
 type Node interface {
 	// ResultSize returns the size of the result
@@ -41,6 +47,9 @@ type Node interface {
 
 	// Eval evaluates the node as an int and panics if the node is unresolved, or not an int
 	Eval() int
+
+	// Eval evaluates the node as a float and panics if the node is unresolved, or not a float
+	EvalFloat() float64
 
 	// Eval evaluates the node as a string and panics if the node is unresolved, or not a string
 	EvalStr() string

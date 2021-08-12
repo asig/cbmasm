@@ -32,7 +32,7 @@ type TokenType int
 const (
 	Unknown TokenType = iota
 	Ident
-	Number
+	Integer
 	String
 	Char
 	LParen
@@ -73,6 +73,7 @@ const (
 	Reserve
 	Byte
 	Word
+	Float
 	Equ
 	Org
 	Align
@@ -96,6 +97,7 @@ var identToTokenType = map[string]TokenType{
 	".reserve":  Reserve,
 	".byte":     Byte,
 	".word":     Word,
+	".float":    Float,
 	".equ":      Equ,
 	".org":      Org,
 	".align":    Align,
@@ -106,7 +108,7 @@ var identToTokenType = map[string]TokenType{
 var tokenTypeToString = map[TokenType]string{
 	Unknown:   "<unknown>",
 	Ident:     "identifier",
-	Number:    "number",
+	Integer:   "integer",
 	String:    "string",
 	Char:      "character",
 	LParen:    "'('",
@@ -158,10 +160,11 @@ func (t TokenType) String() string {
 }
 
 type Token struct {
-	Type   TokenType
-	StrVal string
-	IntVal int64
-	Pos    text.Pos
+	Type     TokenType
+	StrVal   string
+	IntVal   int64
+	FloatVal float64
+	Pos      text.Pos
 }
 
 type Scanner struct {
@@ -249,20 +252,61 @@ func (scanner *Scanner) Scan() Token {
 		return t
 	case unicode.IsDigit(ch):
 		// Read number
-		i, s, err := scanner.readNumber(ch, 10, unicode.IsDigit)
+		i, s, err := scanner.readInteger(ch, 10, unicode.IsDigit)
+		ch = scanner.getch()
+		if ch == '.' {
+			// Potentially floating point
+			ch = scanner.getch()
+			if unicode.IsDigit(ch) {
+				// Floating point!
+				_, s2, err := scanner.readInteger(ch, 10, unicode.IsDigit)
+				t.StrVal = s + "." + s2
+				t.FloatVal, _ = strconv.ParseFloat(t.StrVal, 64)
+				t.Type = Float
+				if err != nil {
+					scanner.errorSink.AddError(t.Pos, "%s is not a valid floating point number", t.StrVal)
+				}
+				return t
+
+			}
+			scanner.ungetch()
+		}
+		scanner.ungetch()
 		t.IntVal = i
 		t.StrVal = s
-		t.Type = Number
+		t.Type = Integer
 		if err != nil {
-			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
+			scanner.errorSink.AddError(t.Pos, "%s is not a valid integer", t.StrVal)
 		}
 		return t
+	case ch == '.':
+		// Ident, floating point number or dot
+		ch = scanner.getch()
+		if unicode.IsDigit(ch) {
+			// Floating point
+			_, s, err := scanner.readInteger(ch, 10, unicode.IsDigit)
+			t.StrVal = "." + s
+			t.Type = Float
+			t.FloatVal, _ = strconv.ParseFloat(t.StrVal, 64)
+			if err != nil {
+				scanner.errorSink.AddError(t.Pos, ".%s is not a valid number", t.StrVal)
+			}
+		} else if isIdentChar(ch) {
+			// Indent
+			t.StrVal = "." + scanner.readIdent(ch)
+			t.Type = Ident
+			if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
+				t.Type = tt
+			}
+		} else {
+			// Just the dot
+			scanner.ungetch()
+			t.Type = Dot
+		}
 	case isIdentStartChar(ch):
 		t.StrVal = scanner.readIdent(ch)
 		t.Type = Ident
-		if t.StrVal == "." {
-			t.Type = Dot
-		} else if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
+		if tt, found := identToTokenType[strings.ToLower(t.StrVal)]; found {
 			t.Type = tt
 		}
 	case ch == '%':
@@ -273,10 +317,10 @@ func (scanner *Scanner) Scan() Token {
 			t.Type = Percent
 			return t
 		}
-		i, s, err := scanner.readNumber(ch, 2, isBinaryDigit)
+		i, s, err := scanner.readInteger(ch, 2, isBinaryDigit)
 		t.IntVal = i
 		t.StrVal = t.StrVal + s
-		t.Type = Number
+		t.Type = Integer
 		if err != nil {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
@@ -298,10 +342,10 @@ func (scanner *Scanner) Scan() Token {
 			t.Type = Ampersand
 			return t
 		}
-		i, s, err := scanner.readNumber(ch, 8, isOctalDigit)
+		i, s, err := scanner.readInteger(ch, 8, isOctalDigit)
 		t.IntVal = i
 		t.StrVal = t.StrVal + s
-		t.Type = Number
+		t.Type = Integer
 		if err != nil {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
@@ -313,10 +357,10 @@ func (scanner *Scanner) Scan() Token {
 			t.Type = Dollar
 			return t
 		}
-		i, s, err := scanner.readNumber(ch, 16, isHexDigit)
+		i, s, err := scanner.readInteger(ch, 16, isHexDigit)
 		t.IntVal = i
 		t.StrVal = t.StrVal + s
-		t.Type = Number
+		t.Type = Integer
 		if err != nil {
 			scanner.errorSink.AddError(t.Pos, "%s is not a valid number", t.StrVal)
 		}
@@ -410,7 +454,7 @@ func (scanner *Scanner) readString(separator rune) string {
 	return s
 }
 
-func (scanner *Scanner) readNumber(ch rune, base int, pred func(rune) bool) (int64, string, error) {
+func (scanner *Scanner) readInteger(ch rune, base int, pred func(rune) bool) (int64, string, error) {
 	s := ""
 	for pred(ch) {
 		s = s + string(ch)

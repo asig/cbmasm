@@ -86,6 +86,53 @@ l:
 	}
 }
 
+func TestAssembler_BadFloatConst(t *testing.T) {
+	tests := []struct {
+		name         string
+		text         string
+		wantErrors   []errors.Error
+		wantWarnings []errors.Error
+	}{
+		{
+			name: "bad float const",
+			text: `   .org 0
+	.float "foobar"
+`,
+			wantErrors:   []errors.Error{{text.Pos{Filename: "", Line: 2, Col: 9}, "Strings are not allowed"}},
+			wantWarnings: []errors.Error{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler.Assemble(text.Process("", test.text))
+			errs := assembler.Errors()
+			if len(errs) != len(test.wantErrors) {
+				t.Errorf("Got %d, want %d errs", len(errs), len(test.wantErrors))
+			}
+			for i := range errs {
+				got := errs[i]
+				want := test.wantErrors[i]
+				if got != want {
+					t.Errorf("Error %d: got %+v, want %+v", i+1, got, want)
+				}
+			}
+			warnings := assembler.Warnings()
+			if len(warnings) != len(test.wantWarnings) {
+				t.Errorf("Got %d, want %d warnings", len(errs), len(test.wantWarnings))
+			}
+			for i := range warnings {
+				got := warnings[i]
+				want := test.wantWarnings[i]
+				if got != want {
+					t.Errorf("Warning %d: got %+v, want %+v", i+1, got, want)
+				}
+			}
+		})
+	}
+}
+
 func TestAssembler_assemble(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -166,6 +213,29 @@ _l1   brk
 			want: []byte{0x02, 0x01, 0x04, 0x03},
 		},
 
+		{
+			name: "float constants",
+			text: `   .org 0
+	.float 2
+	.float 0.0
+	.float .25
+	.float .26
+	.float .27
+	.float .5
+	.float -13.2681
+	.float 2+0.1
+`,
+			want: []byte{
+				0x82, 0x00, 0x00, 0x00, 0x00, // 2.0
+				0x00, 0x00, 0x00, 0x00, 0x00, // 0.0
+				0x7f, 0x00, 0x00, 0x00, 0x00, // 0.25
+				0x7f, 0x05, 0x1e, 0xb8, 0x51, // 0.26; a C128 actually uses 0x52 as the last byte, but with 0x51 it's also printed as ".26"...
+				0x7f, 0x0a, 0x3d, 0x70, 0xa3, // 0.27; a C128 actually uses 0xa4 as the last byte, but with 0xa3 it's also printed as ".27"...
+				0x80, 0x00, 0x00, 0x00, 0x00, // 0.5
+				0x84, 0xd4, 0x4a, 0x23, 0x39, // -13.2681; a C128 actually uses 0x3a as the last byte...
+				0x82, 0x06, 0x66, 0x66, 0x66, // 2.1
+			},
+		},
 		{
 			name: "conditional assembly - ifdef",
 			text: ` .org 0

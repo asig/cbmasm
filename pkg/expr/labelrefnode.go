@@ -88,6 +88,10 @@ func (n *SymbolRefNode) EvalStr() string {
 	panic("Can't eval as string")
 }
 
+func (n *SymbolRefNode) EvalFloat() float64 {
+	panic("Can't eval as float")
+}
+
 func (n *SymbolRefNode) IsResolved() bool {
 	return n.resolved
 }

@@ -21,6 +21,7 @@ package asm
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -434,6 +435,16 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			a.nextToken()
 			n2 := a.dbOp()
 			nodes = append(nodes, n2...)
+		}
+		a.emit(nodes...)
+	case scanner.Float:
+		a.nextToken()
+		// handle float consts
+		nodes := []expr.Node{a.floatDbOp()}
+		for a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			n2 := a.floatDbOp()
+			nodes = append(nodes, n2)
 		}
 		a.emit(nodes...)
 	case scanner.Reserve:
@@ -1082,6 +1093,18 @@ func (a *Assembler) basicDbOp() expr.Node {
 	return n
 }
 
+func (a *Assembler) floatDbOp() expr.Node {
+	n := a.expr(1, false)
+	if n.Type() == expr.NodeType_Int {
+		// Force conversion to float
+		n = expr.NewBinaryOp(n, expr.NewFloatConst(n.Pos(), 0.0), expr.Add)
+	}
+	if n.Type() != expr.NodeType_Float {
+		a.AddError(n.Pos(), "Type must be float")
+	}
+	return n
+}
+
 func containsKey(m map[scanner.TokenType]expr.BinaryOp, key scanner.TokenType) bool {
 	_, found := m[key]
 	return found
@@ -1098,8 +1121,8 @@ func (a *Assembler) expr(size int, stringsAllowed bool) expr.Node {
 	}
 	node := a.term(size, stringsAllowed)
 	if neg {
-		if node.Type() != expr.NodeType_Int {
-			a.AddError(negPos, "Operation not supported on strings")
+		if !node.Type().IsNumeric() {
+			a.AddError(negPos, "Operation not supported on non-numeric types")
 		} else {
 			node = expr.NewUnaryOp(negPos, node, expr.Neg)
 		}
@@ -1116,8 +1139,8 @@ func (a *Assembler) expr(size int, stringsAllowed bool) expr.Node {
 		a.nextToken()
 		p := a.lookahead.Pos
 		n2 := a.term(size, stringsAllowed)
-		if n2.Type() != expr.NodeType_Int || node.Type() != expr.NodeType_Int {
-			a.AddError(p, "operation only supported on int types")
+		if !n2.Type().IsNumeric() || !node.Type().IsNumeric() {
+			a.AddError(p, "operation only supported on numeric types")
 		} else {
 			node = expr.NewBinaryOp(node, n2, op)
 		}
@@ -1141,8 +1164,8 @@ func (a *Assembler) term(size int, stringsAllowed bool) expr.Node {
 		a.nextToken()
 		p := a.lookahead.Pos
 		n2 := a.factor(size, stringsAllowed)
-		if n2.Type() != expr.NodeType_Int || node.Type() != expr.NodeType_Int {
-			a.AddError(p, "operation only supported on int types")
+		if !n2.Type().IsNumeric() || !node.Type().IsNumeric() {
+			a.AddError(p, "operation only supported on numeric types")
 		} else {
 			node = expr.NewBinaryOp(node, n2, op)
 		}
@@ -1163,13 +1186,18 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 		} else {
 			node = expr.NewUnaryOp(p, node, expr.Not)
 		}
-	case scanner.Number:
+	case scanner.Integer:
 		p := a.lookahead.Pos
 		val := a.lookahead.IntVal
 		node = expr.NewConst(p, int(val), size)
 		if !checkSize(size, int(val)) {
 			a.AddError(p, "Constant $%x (decimal %d) is wider than %d bits", val, val, size*8)
 		}
+		a.nextToken()
+	case scanner.Float:
+		p := a.lookahead.Pos
+		val := a.lookahead.FloatVal
+		node = expr.NewFloatConst(p, val)
 		a.nextToken()
 	case scanner.Char:
 		p := a.lookahead.Pos
@@ -1195,6 +1223,8 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 				switch s.val.Type() {
 				case expr.NodeType_Int:
 					node = expr.NewConst(p, s.val.Eval(), size)
+				case expr.NodeType_Float:
+					node = expr.NewFloatConst(p, s.val.EvalFloat())
 				case expr.NodeType_String:
 					if stringsAllowed {
 						node = expr.NewStrConst(p, s.val.EvalStr())
@@ -1258,33 +1288,78 @@ func (a *Assembler) emitNode(n expr.Node) {
 		a.AddError(a.scanner.LineStart(), "No .org specified")
 		a.section = NewSection(0, a)
 	}
-	if n.Type() == expr.NodeType_String {
+
+	switch n.Type() {
+	case expr.NodeType_String:
 		str := n.EvalStr()
 		for _, b := range str {
 			a.section.Emit(byte(b & 0xff))
 		}
-		return
-	}
+	case expr.NodeType_Float:
+		if !n.IsResolved() {
+			a.AddError(n.Pos(), "Can't emit unresolved float")
+			return
+		}
 
-	var val, size int
-	if !n.IsResolved() {
-		// register a patch, and emit 0 bytes
-		a.registerPatch(a.section.PC(), n)
-		val = 0
-	} else {
-		a.checkRange(n)
-		val = n.Eval()
-	}
-	size = n.ResultSize()
-	if n.IsRelative() {
-		val = val - (a.section.PC() + 1)
-		size = 1
-	}
-	a.emitted = a.emitted + size
-	for size > 0 {
-		a.section.Emit(byte(val & 0xff))
-		val = val >> 8
-		size = size - 1
+		v := float64(n.EvalFloat())
+		res := []byte{0, 0, 0, 0, 0}
+		sign := 1
+		if v < 0 {
+			v = -v
+			sign = -1
+		}
+		if v != 0 {
+			// Convert to m * 2^e, with 0.5 <= m < 1
+			e := math.Floor(math.Log2(v) + 1)
+			m := v / math.Pow(2, e)
+			if e < -127 || e > 127 {
+				// Exponent out of range
+				a.AddError(n.Pos(), "Number is out of range.")
+				e = 0
+			}
+
+			// Convert mantissa to bytes
+			for i := 0; i < 4; i++ {
+				res[i+1] = byte(int(m * 256))
+				m = (m * 256) - float64(int(m*256))
+			}
+
+			// Convert exponent to byte
+			res[0] = byte(e + 128)
+
+			// Fix the sign bit. No need to set it for negative numbers, as the first
+			// bit of the mantissa is 1 by definition
+			if sign > 0 {
+				// Positive, unset msb
+				res[1] = res[1] & 127
+			}
+		}
+		for _, b := range res {
+			a.section.Emit(b)
+		}
+		a.emitted += len(res)
+
+	default:
+		var val, size int
+		if !n.IsResolved() {
+			// register a patch, and emit 0 bytes
+			a.registerPatch(a.section.PC(), n)
+			val = 0
+		} else {
+			a.checkRange(n)
+			val = n.Eval()
+		}
+		size = n.ResultSize()
+		if n.IsRelative() {
+			val = val - (a.section.PC() + 1)
+			size = 1
+		}
+		a.emitted = a.emitted + size
+		for size > 0 {
+			a.section.Emit(byte(val & 0xff))
+			val = val >> 8
+			size = size - 1
+		}
 	}
 }
 

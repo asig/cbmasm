@@ -81,6 +81,9 @@ TODO
 ### `.word`
 TODO
 
+### `.float`
+TODO
+
 ### `.reserve`
 TODO
 
@@ -109,6 +112,7 @@ op := ".macro" [ident {"," ident }]
     | ".org" expr
     | ".align" expr
     | ".byte" dbOp {"," dbOp }
+    | ".float" expr {"," expr }
     | ".word" expr {"," expr }
     | ".reserve" expr ["," dbOp ]
     | ".cpu" string 

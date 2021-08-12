@@ -24,9 +24,10 @@ import (
 )
 
 type UnaryOp struct {
-	transformation    func(int) int
-	transformationStr func(string) string
-	size              func(Node) int
+	transformation      func(int) int
+	transformationStr   func(string) string
+	transformationFloat func(float64) float64
+	size                func(Node) int
 }
 
 var (
@@ -39,8 +40,9 @@ var (
 		size:           func(_ Node) int { return 1 },
 	}
 	Neg = UnaryOp{
-		transformation: func(v int) int { return -v },
-		size:           func(n Node) int { return n.ResultSize() },
+		transformation:      func(v int) int { return -v },
+		transformationFloat: func(v float64) float64 { return -v },
+		size:                func(n Node) int { return n.ResultSize() },
 	}
 	Not = UnaryOp{
 		transformation: func(v int) int { return ^v },
@@ -110,6 +112,21 @@ func (n *UnaryOpNode) Eval() int {
 	}
 	v := n.node.Eval()
 	return n.op.transformation(v)
+}
+
+func (n *UnaryOpNode) EvalFloat() float64 {
+	if !n.IsResolved() {
+		panic("Can't evaluate non-const expr node")
+	}
+	if n.Type() != NodeType_Float {
+		panic("Can't EvalFloat() a non-float node")
+	}
+	if n.op.transformationFloat == nil {
+		panic("Operation not supported on float nodes")
+	}
+
+	v := n.node.EvalFloat()
+	return n.op.transformationFloat(v)
 }
 
 func (n *UnaryOpNode) EvalStr() string {

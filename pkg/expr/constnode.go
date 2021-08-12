@@ -30,7 +30,8 @@ type ConstNode struct {
 	size       int
 	val        int
 	strval     string
-	typ NodeType
+	floatval   float64
+	typ        NodeType
 	isRelative bool
 }
 
@@ -39,7 +40,7 @@ func NewConst(pos text.Pos, val, size int) Node {
 		pos:        pos,
 		size:       size,
 		val:        val,
-		typ: NodeType_Int,
+		typ:        NodeType_Int,
 		isRelative: false,
 	}
 }
@@ -48,8 +49,18 @@ func NewStrConst(pos text.Pos, val string) Node {
 	return &ConstNode{
 		pos:        pos,
 		size:       len(val),
-		strval:        val,
-		typ: NodeType_String,
+		strval:     val,
+		typ:        NodeType_String,
+		isRelative: false,
+	}
+}
+
+func NewFloatConst(pos text.Pos, val float64) Node {
+	return &ConstNode{
+		pos:        pos,
+		size:       5,
+		floatval:   val,
+		typ:        NodeType_Float,
 		isRelative: false,
 	}
 }
@@ -64,7 +75,10 @@ func (n *ConstNode) ResultSize() int {
 
 func (n *ConstNode) ForceSize(size int) bool {
 	var min, max int
-	if n.IsSigned() {
+	if n.Type() == NodeType_Float {
+		min = 5
+		max = 5
+	} else if n.IsSigned() {
 		min = (-1) << (size*8 - 1)
 		max = (1 << (size*8 - 1)) - 1
 	} else {
@@ -85,13 +99,19 @@ func (n *ConstNode) Eval() int {
 	return n.val
 }
 
+func (n *ConstNode) EvalFloat() float64 {
+	if n.typ != NodeType_Float {
+		panic("type is not float")
+	}
+	return n.floatval
+}
+
 func (n *ConstNode) EvalStr() string {
 	if n.typ != NodeType_String {
 		panic("type is not string")
 	}
 	return n.strval
 }
-
 
 func (n *ConstNode) IsResolved() bool {
 	return true
