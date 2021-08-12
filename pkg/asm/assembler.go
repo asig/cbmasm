@@ -58,6 +58,13 @@ func IsSupportedCPU(s string) bool {
 	return false
 }
 
+func IsValidPlatformCPUCombo(platform, cpu string) bool {
+	if cpu == "z80" {
+		return platform == "c128"
+	}
+	return true
+}
+
 // patch records nodes that can't be evaluated because of undefined nodes
 type patch struct {
 	pc   int       // Place to patch
@@ -109,7 +116,6 @@ type Assembler struct {
 	defaultCPU      string
 
 	// All following fields are reset in Assemble()
-
 	errorModifier   errors.Modifier
 	mnemonicHandler mnemonicHandler
 	errors          []errors.Error
@@ -122,6 +128,9 @@ type Assembler struct {
 	canSetPlatform  bool
 	assemblyEnabled stack
 	state           state
+
+	currentPlatform string
+	currentCPU      string
 
 	ListingLines []ListingLine
 
@@ -513,6 +522,8 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.match(scanner.String)
 		if !IsSupportedCPU(cpu) {
 			a.AddError(pos, "Unknown CPU %q", cpu)
+		} else if !IsValidPlatformCPUCombo(a.currentPlatform, cpu) {
+			a.AddError(pos, "CPU %q not supported for platform %q", cpu, a.currentPlatform)
 		} else {
 			a.setCPU(cpu)
 		}
@@ -528,6 +539,8 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.match(scanner.String)
 		if !IsSupportedPlatform(platform) {
 			a.AddError(pos, "Unknown platform %q", platform)
+		} else if !IsValidPlatformCPUCombo(platform, a.currentCPU) {
+			a.AddError(pos, "Platform %q not supported for COU %q", platform, a.currentCPU)
 		} else {
 			a.setPlatform(platform)
 		}
@@ -595,11 +608,13 @@ func (a *Assembler) setCPU(cpu string) {
 	}
 	a.symbols.remove("CPU")
 	a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(text.Pos{}, cpu), kind: symbolConst})
+	a.currentCPU = cpu
 }
 
 func (a *Assembler) setPlatform(p string) {
 	a.symbols.remove("PLATFORM")
 	a.symbols.add(symbol{name: "PLATFORM", val: expr.NewStrConst(text.Pos{}, strings.ToLower(p)), kind: symbolConst})
+	a.currentPlatform = p
 }
 
 func (a *Assembler) macroParam() {

@@ -139,6 +139,12 @@ func init() {
 		os.Exit(1)
 	}
 
+	if !asm.IsValidPlatformCPUCombo(*flagPlatform, *flagCPU) {
+		errorOutput.Printf("Platform %q is not supported for CPU %q.", *flagPlatform, *flagCPU)
+		usage()
+		os.Exit(1)
+	}
+
 	if len(flagIncludeDirs) == 0 {
 		// default to "." if no include dirs are set.
 		flagIncludeDirs = pathListFlag{"."}
