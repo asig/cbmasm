@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	SupportedPlatforms = []string{"c128", "c64"}
+	SupportedPlatforms = []string{"c128", "c64", "pet"}
 	SupportedCPUs      = []string{"6502", "z80"}
 )
 

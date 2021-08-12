@@ -36,8 +36,20 @@ _next   .word 0              ; End of listing
 _next   .word 0              ; End of listing
 
         .else
+
+        .if PLATFORM = "pet"
+
+        ; BASIC header for PET
+        .org $401
+        .word _next          ; pointer to next line
+        .word 65535          ; line number (65535)
+        .byte $9e, "1037",0  ; SYS 1037
+_next   .word 0              ; End of listing
+
+        .else
+
         .fail "Unsupported platform."
         .endif
-
+        .endif
         .endif
 
