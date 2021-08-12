@@ -1,3 +1,6 @@
+    .platform "c128"
+DEBUG .equ 1
+
 ; Copyright (c) 2021 Andreas Signer <asigner@gmail.com>
 ;
 ; This file is part of cbmasm.
@@ -16,7 +19,6 @@
 ; along with cbmasm.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-
 ; This small intro is inspired by the famous maze generator
 ; 10 PRINT CHR$(205.5+RND(1));:GOTO 10
 
@@ -30,8 +32,8 @@ DEBUG_COL   .macro col
             .endif
             .endm
 
-ptr1    .equ $fa ; zero page address used for memory indexing
-ptr2    .equ $fc ; zero page address used for memory indexing
+ptr1    .equ $fa ; $fa/$fb zero page address used for memory indexing
+ptr2    .equ $fc ; $fc/$fd zero page address used for memory indexing
 
 rasterline0 .equ 30             ; set vscroll
 rasterline1 .equ 50             ; Switch to DGREY
@@ -42,13 +44,25 @@ rasterline5 .equ 50-4+20*8-20   ; Switch to LGREY
 rasterline6 .equ 50-4+20*8-15   ; Switch to GREY
 rasterline7 .equ 50-4+20*8-10   ; Switch to DGREY
 rasterline8 .equ 50-4+20*8      ; Switch to BLACK
+rasterline_last .equ 255      ; Handle sprites
 
-vram            .equ    $400
+
+vram            .equ $400
 color_ram       .equ $d800
 
 last_line       .equ vram+19*40
 scroll_line     .equ vram+22*40
 scroll_line_col .equ color_ram+22*40
+
+SPRITE_0_DATA   .equ vram+$3f8
+SPRITE_1_DATA   .equ vram+$3f9
+SPRITE_2_DATA   .equ vram+$3fa
+SPRITE_3_DATA   .equ vram+$3fb
+SPRITE_4_DATA   .equ vram+$3fc
+SPRITE_5_DATA   .equ vram+$3fd
+SPRITE_6_DATA   .equ vram+$3fe
+SPRITE_7_DATA   .equ vram+$3ff
+
 
         .include "startup.i"
         jmp start
@@ -57,13 +71,31 @@ scrollx .byte 0
 scrolly .byte 0
 irqcnt  .byte 0
 start:
+        sei
+
         .if PLATFORM = "c128"
-        lda #$3e  ; All RAM, except I/O range at $d000
+        lda #$3e        ; All RAM, except I/O range at $d000
         sta $ff00
+
+
+        lda #$ff        ; Turn off BASIC7's raster irq handling...
+         sta $d8         ; ... so that we can change the font
+
+        lda $a04        ; Clear bit 0...
+        and #%11111110  ; ...of $a04...
+        sta $a04        ; ... to disable BASIC IRQ
         .endif
 
-        jsr songCopy
+        ; Switch to new font
+        lda VIC_MCR
+        and #%11110001
+        ora #%00001110 ; Bits 3-1 == 111 -> font starts at $3800
+        sta VIC_MCR
+
+        cli
+
         jsr songInit
+        jsr init_sprites
         jsr init_random
         jsr clear_screen
         jsr install_irq
@@ -79,14 +111,33 @@ loop:
 _w      lda irqcnt
         bne _w
 
-        jsr songPlay
+        ;jsr songPlay
 
         lda #1      ; wait another 1 interrupts ...
         sta irqcnt
 _w2     lda irqcnt
         bne _w2
 
-        jsr songPlay
+        ;jsr songPlay
+
+        ; soft scroll the "border" char
+        ldx fontdata+255*8+7
+
+        lda fontdata+255*8+6
+        sta fontdata+255*8+7
+        lda fontdata+255*8+5
+        sta fontdata+255*8+6
+        lda fontdata+255*8+4
+        sta fontdata+255*8+5
+        lda fontdata+255*8+3
+        sta fontdata+255*8+4
+        lda fontdata+255*8+2
+        sta fontdata+255*8+3
+        lda fontdata+255*8+1
+        sta fontdata+255*8+2
+        lda fontdata+255*8+0
+        sta fontdata+255*8+1
+        stx fontdata+255*8+0
 
         ; soft scroll the maze
         ldx scrolly
@@ -179,17 +230,20 @@ scroll_pos  .word 0
 scroll_text .byte scr("                                      hello world, welcome to the awesome maze!!!!   and one and two and three and four and RESET!                                      "),0
 colofs  .byte 7
 scroll_cols
-        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
-        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
-        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
-        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
-
-        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
-        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
-        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
-        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
-
         .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_WHITE,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_WHITE,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_WHITE,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_WHITE,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+        .byte COL_BLUE,COL_BLUE,COL_BLUE,COL_LBLUE,COL_LBLUE,COL_LBLUE,COL_CYAN,COL_CYAN,COL_LGREEN,COL_YELLOW,COL_LGREEN,COL_CYAN,COL_CYAN,COL_LBLUE,COL_LBLUE,COL_LBLUE
+
+        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
+        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
+        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
+        .byte COL_BLACK,COL_BLACK,COL_BLACK,COL_DGREY,COL_DGREY,COL_DGREY,COL_GREY,COL_GREY,COL_LGREY,COL_WHITE,COL_LGREY,COL_GREY,COL_GREY,COL_DGREY,COL_DGREY,COL_DGREY
 
 
 install_irq:
@@ -233,7 +287,7 @@ _irqdispatch
         jmp _rasterline0
 
 _rasterline0
-        lda #0
+        lda #7
         sta $d016
 
         lda #%00010000
@@ -312,6 +366,19 @@ _rasterline8
         sta $d016
         jsr scroll_colors
 
+        lda #rasterline_last
+        sta $d012
+        dec irqcnt
+        SET16 _irqdispatch+1, _rasterline_last
+        jmp _endirq
+
+_rasterline_last
+        DEBUG_COL #3
+        jsr songPlay
+        DEBUG_COL #4
+        jsr move_sprites
+        DEBUG_COL #0
+
         lda #rasterline0
         sta $d012
         dec irqcnt
@@ -320,6 +387,109 @@ _endirq
 irq_chain:
         jmp $ffff   ; jump to original interrupt handler. Will be patched at runtime
 
+
+init_sprites:
+        lda #$ff
+        sta SPRITES_VISIBLE ; All sprites visible
+        sta SPRITES_DBL_W   ; All sprites double width
+        sta SPRITES_DBL_H   ; All sprites double height
+
+        lda #0
+        sta SPRITES_PRIO    ; All sprite before background
+
+        lda #sprite_1/64
+        sta SPRITE_0_DATA
+
+        lda #sprite_2/64
+        sta SPRITE_1_DATA
+
+        lda #sprite_3/64
+        sta SPRITE_2_DATA
+
+        lda #sprite_4/64
+        sta SPRITE_3_DATA
+
+        lda #sprite_box/64
+        sta SPRITE_0_DATA
+        sta SPRITE_1_DATA
+        sta SPRITE_2_DATA
+        sta SPRITE_3_DATA
+        sta SPRITE_4_DATA
+        sta SPRITE_5_DATA
+        sta SPRITE_6_DATA
+        sta SPRITE_7_DATA
+
+        ldx #1
+        stx SPRITE_0_COL
+        inx
+        stx SPRITE_1_COL
+        inx
+        stx SPRITE_2_COL
+        inx
+        stx SPRITE_3_COL
+        inx
+        stx SPRITE_4_COL
+        inx
+        stx SPRITE_5_COL
+        inx
+        stx SPRITE_6_COL
+        inx
+        stx SPRITE_7_COL
+        rts
+
+sprite_0_pos_x  .byte  0+0*20
+sprite_0_pos_y  .byte 64+0*20
+sprite_1_pos_x  .byte  0+1*20
+sprite_1_pos_y  .byte 64+1*20
+sprite_2_pos_x  .byte  0+2*20
+sprite_2_pos_y  .byte 64+2*20
+sprite_3_pos_x  .byte  0+3*20
+sprite_3_pos_y  .byte 64+3*20
+sprite_4_pos_x  .byte  0+4*20
+sprite_4_pos_y  .byte 64+4*20
+sprite_5_pos_x  .byte  0+5*20
+sprite_5_pos_y  .byte 64+5*20
+sprite_6_pos_x  .byte  0+6*20
+sprite_6_pos_y  .byte 64+6*20
+sprite_7_pos_x  .byte  0+7*20
+sprite_7_pos_y  .byte 64+7*20
+
+sprite_inc_x  .byte 255
+sprite_inc_y  .byte 255
+
+MOVESPR   .macro xreg, yreg, posx, posy, incx, incy
+        ldy posx
+        lda (ptr1),y
+        sta xreg
+        ldy posy
+        lda (ptr1),y
+        sta yreg
+
+        lda posx
+        clc
+        adc incx
+        sta posx
+        clc
+        lda posy
+        adc incy
+        sta posy
+        .endm
+
+
+move_sprites:
+        SET16 ptr1, sintab
+
+        MOVESPR SPRITE_0_X, SPRITE_0_Y, sprite_0_pos_x, sprite_0_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_1_X, SPRITE_1_Y, sprite_1_pos_x, sprite_1_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_2_X, SPRITE_2_Y, sprite_2_pos_x, sprite_2_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_3_X, SPRITE_3_Y, sprite_3_pos_x, sprite_3_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_4_X, SPRITE_4_Y, sprite_4_pos_x, sprite_4_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_5_X, SPRITE_5_Y, sprite_5_pos_x, sprite_5_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_6_X, SPRITE_6_Y, sprite_6_pos_x, sprite_6_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR SPRITE_7_X, SPRITE_7_Y, sprite_7_pos_x, sprite_7_pos_y, sprite_inc_x, sprite_inc_y
+
+
+        rts
 
 clear_screen
         ; empty video ram
@@ -386,6 +556,9 @@ _l      jsr random  ; load random value
 _addr   sta (ptr1),y
         dey
         bpl _l
+        lda #255
+        sta last_line+0
+        sta last_line+37
         rts
 
 scroll_up:
@@ -518,5 +691,292 @@ random:
 rndval: .reserve 1
 
 
+sintab:
+        .byte 128,131,134,137,140,143,146,149,152,156,159,162,165,168,171,174
+        .byte 176,179,182,185,188,191,193,196,199,201,204,206,209,211,213,216
+        .byte 218,220,222,224,226,228,230,232,234,236,237,239,240,242,243,245
+        .byte 246,247,248,249,250,251,252,252,253,254,254,255,255,255,255,255
+        .byte 255,255,255,255,255,255,254,254,253,252,252,251,250,249,248,247
+        .byte 246,245,243,242,240,239,237,236,234,232,230,228,226,224,222,220
+        .byte 218,216,213,211,209,206,204,201,199,196,193,191,188,185,182,179
+        .byte 176,174,171,168,165,162,159,156,152,149,146,143,140,137,134,131
+        .byte 128,124,121,118,115,112,109,106,103, 99, 96, 93, 90, 87, 84, 81
+        .byte  79, 76, 73, 70, 67, 64, 62, 59, 56, 54, 51, 49, 46, 44, 42, 39
+        .byte  37, 35, 33, 31, 29, 27, 25, 23, 21, 19, 18, 16, 15, 13, 12, 10
+        .byte   9,  8,  7,  6,  5,  4,  3,  3,  2,  1,  1,  0,  0,  0,  0,  0
+        .byte   0,  0,  0,  0,  0,  0,  1,  1,  2,  3,  3,  4,  5,  6,  7,  8
+        .byte   9, 10, 12, 13, 15, 16, 18, 19, 21, 23, 25, 27, 29, 31, 33, 35
+        .byte  37, 39, 42, 44, 46, 49, 51, 54, 56, 59, 62, 64, 67, 70, 73, 76
+        .byte  79, 81, 84, 87, 90, 93, 96, 99,103,106,109,112,115,118,121,124
+
+
+
+; sprite 0 / singlecolor / color: $01
+        .align 64
+sprite_0:
+        .byte %11111111,%11111111,%11000000
+        .byte %11111111,%11111111,%11000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000111,%11111000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 1 / singlecolor / color: $01
+        .align 64
+sprite_1:
+        .byte %11110000,%00000000,%00011111
+        .byte %11111000,%00000000,%00111111
+        .byte %11111100,%00000000,%01111111
+        .byte %11111110,%00000000,%11111111
+        .byte %11111111,%00000001,%11111111
+        .byte %11111111,%10000011,%11111111
+        .byte %11111111,%11000111,%11111111
+        .byte %11111111,%11101111,%11111111
+        .byte %11100111,%11111110,%01111111
+        .byte %11100011,%11111100,%01111111
+        .byte %11100001,%11111000,%01111111
+        .byte %11100000,%11110000,%01111111
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 2 / singlecolor / color: $01
+        .align 64
+sprite_2:
+        .byte %00000000,%00111100,%00000000
+        .byte %00000000,%01111110,%00000000
+        .byte %00000000,%11111111,%00000000
+        .byte %00000001,%11111111,%10000000
+        .byte %00000011,%11111111,%11000000
+        .byte %00000111,%11111111,%11100000
+        .byte %00001111,%00111111,%11110000
+        .byte %00011110,%00011111,%11111000
+        .byte %00111100,%00001111,%11111100
+        .byte %01111000,%00000111,%11111110
+        .byte %11111111,%11110011,%11111111
+        .byte %11111111,%11110001,%11111111
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 3 / singlecolor / color: $01
+        .align 64
+sprite_3:
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111111,%11111111,%11100000
+        .byte %11111111,%11111111,%11100000
+        .byte %11111111,%11111111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %11111110,%00001111,%11100000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 4 / singlecolor / color: $01
+        .align 64
+sprite_4:
+        .byte %11111111,%11111111,%11000000
+        .byte %11111111,%11111111,%11000000
+        .byte %00000000,%11111111,%10000000
+        .byte %00000001,%11111111,%00000000
+        .byte %00000011,%11111110,%00000000
+        .byte %00000111,%11111100,%00000000
+        .byte %00001111,%11111000,%00000000
+        .byte %00011111,%11110000,%00000000
+        .byte %00111111,%11100000,%00000000
+        .byte %01111111,%11000000,%00000000
+        .byte %11111111,%11111111,%11000000
+        .byte %11111111,%11111111,%11000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 5 / singlecolor / color: $01
+        .align 64
+sprite_5:
+        .byte %00011111,%11111111,%11100000
+        .byte %01111111,%11111111,%11100000
+        .byte %01111111,%10000000,%00000000
+        .byte %11111111,%00000000,%00000000
+        .byte %11111111,%01111111,%11100000
+        .byte %11111111,%01111111,%11100000
+        .byte %11111111,%01111111,%11100000
+        .byte %11111111,%00000000,%00000000
+        .byte %11111111,%00000000,%00000000
+        .byte %01111111,%10000000,%00000000
+        .byte %01111111,%11111111,%11100000
+        .byte %00011111,%11111111,%11100000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 6 / singlecolor / color: $01
+        .align 64
+sprite_6:
+        .byte %00011111,%11111111,%00000000
+        .byte %00111111,%11111111,%10000000
+        .byte %01111110,%00001111,%11000000
+        .byte %01111100,%00000111,%11000000
+        .byte %11111100,%00100111,%11100000
+        .byte %11111100,%01100111,%11100000
+        .byte %11111100,%11000111,%11100000
+        .byte %11111100,%10000111,%11100000
+        .byte %01111100,%00000111,%11000000
+        .byte %01111110,%00001111,%11000000
+        .byte %00111111,%11111111,%10000000
+        .byte %00011111,%11111111,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+; sprite 7 / singlecolor / color: $01
+        .align 64
+sprite_7:
+        .byte %11111111,%11111110,%00000000
+        .byte %11111111,%11111111,%00000000
+        .byte %00000000,%00111111,%10000000
+        .byte %00000000,%00011111,%10000000
+        .byte %00000000,%00111111,%10000000
+        .byte %01111111,%11111111,%00000000
+        .byte %11111111,%11111110,%00000000
+        .byte %11111110,%00000000,%00000000
+        .byte %11111110,%00000000,%00000000
+        .byte %11111110,%00000000,%00000000
+        .byte %11111111,%11111111,%10000000
+        .byte %11111111,%11111111,%10000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+
+
+; sprite 7 / singlecolor / color: $01
+        .align 64
+sprite_box:
+        .byte %11111111,%11111111,%11111111
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %10000000,%00000000,%00000001
+        .byte %11111111,%11111111,%11111111
+
+
+        .org $3800
+fontdata:
+        .incbin "font.bin"
+
         ; Use tools/sidconv to convert a sid file to asm source
-        .include "songdata.i"
+songInit:	.equ $41ed
+songPlay:	.equ $4004
+        .org $4000
+songdata:
+        .reserve 1
+        .byte $4c, $07, $40, $4c, $b7, $40, $a2, $00, $a9, $01, $85, $80, $8a, $a8, $a5, $80
+        .byte $99, $ab, $48, $0a, $85, $80, $bd, $30, $41, $99, $2b, $49, $2a, $9d, $30, $41
+        .byte $90, $06, $a5, $80, $69, $00, $85, $80, $18, $98, $69, $0c, $a8, $10, $df, $e8
+        .byte $e0, $0c, $d0, $d4, $a0, $0e, $8c, $18, $d4, $a2, $02, $bd, $ea, $41, $99, $2f
+        .byte $48, $a9, $0e, $99, $1a, $48, $98, $e9, $07, $a8, $ca, $d0, $ee, $60, $bc, $15
+        .byte $48, $bd, $02, $48, $79, $74, $41, $dd, $02, $48, $9d, $02, $48, $b0, $03, $fe
+        .byte $03, $48, $98, $0a, $0a, $7d, $16, $48, $fd, $15, $48, $a8, $b9, $51, $41, $9d
+        .byte $04, $48, $b9, $3c, $41, $c9, $f0, $90, $12, $29, $0f, $7d, $18, $48, $7d, $2c
+        .byte $48, $a8, $b9, $2a, $49, $9d, $00, $48, $b9, $aa, $48, $9d, $01, $48, $fe, $16
+        .byte $48, $bd, $16, $48, $29, $03, $d0, $0a, $bc, $15, $48, $b9, $6d, $41, $4a, $4a
+        .byte $4a, $4a, $9d, $16, $48, $a0, $07, $bd, $00, $48, $9d, $00, $d4, $e8, $88, $d0
+        .byte $f6, $e0, $15, $d0, $03, $60, $a2, $00, $de, $2e, $48, $10, $91, $a9, $06, $9d
+        .byte $2e, $48, $de, $2a, $48, $10, $87, $fe, $19, $48, $bc, $19, $48, $bd, $1b, $48
+        .byte $9d, $2a, $48, $b9, $7b, $41, $f0, $cd, $30, $1e, $9d, $18, $48, $a9, $00, $9d
+        .byte $16, $48, $bc, $15, $48, $b9, $6d, $41, $9d, $03, $48, $b9, $66, $41, $9d, $06
+        .byte $48, $a9, $09, $9d, $04, $48, $10, $96, $c9, $ff, $f0, $10, $c9, $df, $29, $0f
+        .byte $90, $05, $9d, $15, $48, $10, $c0, $9d, $1b, $48, $10, $bb, $fe, $1a, $48, $bc
+        .byte $1a, $48, $b9, $bd, $41, $30, $05, $9d, $19, $48, $10, $ae, $c9, $ff, $f0, $07
+        .byte $29, $0f, $9d, $2c, $48, $10, $e5, $bd, $2f, $48, $9d, $1a, $48, $10, $e0, $0c
+        .byte $1c, $2d, $3e, $51, $66, $7b, $91, $a9, $c3, $dd, $fa, $f3, $f7, $f0, $f4, $f7
+        .byte $f0, $10, $af, $06, $f0, $f0, $f0, $14, $0c, $e0, $fc, $ef, $f0, $fc, $fc, $f0
+        .byte $41, $41, $41, $41, $41, $41, $41, $81, $40, $41, $41, $40, $41, $41, $80, $11
+        .byte $81, $40, $11, $21, $40, $6f, $6f, $95, $ec, $a9, $79, $6e, $15, $18, $38, $30
+        .byte $38, $3b, $36, $1c, $0c, $00, $15, $00, $74, $a5, $00, $ff, $81, $e3, $11, $1d
+        .byte $82, $e4, $55, $82, $e3, $11, $81, $1d, $e4, $55, $e3, $18, $ff, $e2, $55, $e5
+        .byte $30, $35, $3a, $41, $35, $3a, $29, $ff, $8f, $e0, $35, $e1, $33, $31, $00, $e0
+        .byte $35, $e1, $33, $e0, $2e, $00, $ff, $e6, $82, $38, $37, $87, $ff, $33, $80, $2e
+        .byte $2c, $ff, $31, $8f, $00, $81, $00, $ff, $8f, $2e, $00, $ff, $f0, $02, $02, $f5
+        .byte $02, $02, $f8, $02, $fa, $02, $f1, $02, $02, $ff, $13, $ff, $1e, $1e, $2d, $33
+        .byte $2d, $33, $2d, $38, $2d, $33, $2d, $33, $3e, $2d, $f7, $33, $f0, $2d, $f9, $33
+        .byte $f0, $2d, $38, $2d, $33, $2d, $33, $3e, $ff, $00, $0e, $10, $a2, $00, $8a, $9d
+        .byte $00, $48, $e8, $d0, $fa, $4c, $01, $40
