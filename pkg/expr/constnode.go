@@ -36,13 +36,15 @@ type ConstNode struct {
 }
 
 func NewConst(pos text.Pos, val, size int) Node {
-	return &ConstNode{
+	n := &ConstNode{
 		pos:        pos,
 		size:       size,
 		val:        val,
 		typ:        NodeType_Int,
 		isRelative: false,
 	}
+	n.OptimizeSize()
+	return n
 }
 
 func NewStrConst(pos text.Pos, val string) Node {
@@ -71,6 +73,21 @@ func (n *ConstNode) Type() NodeType {
 
 func (n *ConstNode) ResultSize() int {
 	return n.size
+}
+
+func (n *ConstNode) OptimizeSize() {
+	if n.Type() != NodeType_Int {
+		return
+	}
+	if n.IsSigned() {
+		if -128 <= n.val && n.val <= 127 {
+			n.size = 1
+		}
+	} else {
+		if 0 <= n.val && n.val <= 255 {
+			n.size = 1
+		}
+	}
 }
 
 func (n *ConstNode) ForceSize(size int) bool {

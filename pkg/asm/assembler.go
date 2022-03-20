@@ -784,6 +784,17 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 	}
 	param := a.mos6502Param()
 	opCode, found := opCodes[param.mode]
+
+	if !found && param.mode == mos6502.AM_ZeroPage {
+		// Let's see if this will work with regular Absolute addressing mode
+		param.mode = mos6502.AM_Absolute
+		opCode, found = opCodes[param.mode]
+		if found {
+			// It does, but we need to enforce the size now
+			param.val.ForceSize(2)
+		}
+	}
+
 	if !found && param.mode == mos6502.AM_Absolute {
 		// Maybe it's a relative branch? let's check
 		opCode, found = opCodes[mos6502.AM_Relative]
@@ -798,7 +809,9 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 		if found {
 			// Yes, it is!
 			param.mode = mos6502.AM_ZeroPageIndexedX
-			param.val.ForceSize(1)
+			if !param.val.ForceSize(1) {
+				a.AddError(t.Pos, "parameter too big for 1 byte")
+			}
 		}
 	} else if !found && param.mode == mos6502.AM_AbsoluteIndexedY {
 		// Maybe it's AM_ZeroPageIndexedY?
@@ -806,7 +819,9 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 		if found {
 			// Yes, it is!
 			param.mode = mos6502.AM_ZeroPageIndexedY
-			param.val.ForceSize(1)
+			if !param.val.ForceSize(1) {
+				a.AddError(t.Pos, "parameter too big for 1 byte")
+			}
 		}
 	}
 	if !found {
@@ -1030,7 +1045,7 @@ func (a *Assembler) z80Param() z80.Param {
 					if neg {
 						node = expr.NewUnaryOp(negPos, node, expr.Neg)
 					}
-					node.ForceSize(1)
+					node.ForceSize(1) // Needed?
 					node.MarkSigned()
 					param.Val = node
 				}
