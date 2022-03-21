@@ -933,9 +933,6 @@ func (a *Assembler) mos6502Param() mos6502Param {
 				if !node.ForceSize(1) {
 					a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 				}
-			} else {
-				// We can't, so complain
-				a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 			}
 			reg := a.lookahead.StrVal
 			pos := a.lookahead.Pos
@@ -954,11 +951,9 @@ func (a *Assembler) mos6502Param() mos6502Param {
 				if node.ResultSize() > 1 {
 					// Let see if we can enforce size
 					if !node.ForceSize(1) {
+						// We can't, so complain
 						a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 					}
-				} else {
-					// We can't, so complain
-					a.AddError(a.lookahead.Pos, "Address $%x is too large, only 8 bits allowed", node.Eval())
 				}
 				reg := a.lookahead.StrVal
 				pos := a.lookahead.Pos
