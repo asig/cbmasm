@@ -478,7 +478,10 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			n2 := a.expr(2, false)
 			nodes = append(nodes, n2)
 		}
-		a.emit(nodes...)
+		for _, n := range nodes {
+			n.ForceSize(2)
+			a.emit(n)
+		}
 	case scanner.Org:
 		a.nextToken()
 		// set origin

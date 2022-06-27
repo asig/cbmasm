@@ -206,11 +206,19 @@ _l1   brk
 		},
 
 		{
-			name: "word constants",
+			name: "word constants, 2 bytes",
 			text: `   .org 0
 	.word $0102,$0304
 `,
 			want: []byte{0x02, 0x01, 0x04, 0x03},
+		},
+
+		{
+			name: "word constants, 1 bytes",
+			text: `   .org 0
+	.word $01, 02
+`,
+			want: []byte{0x01, 0x00, 0x02, 0x00},
 		},
 
 		{

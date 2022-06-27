@@ -17,6 +17,7 @@
     [ ] Allow override in the code only if no other directive (except macro def) has been executed
 [X] store value of ".cpu" in symbol table
 [X] LDx/STx should use zero page addressing if possible (example: "dp .equ $fb; sta dp" should generate $85 $FB, not $8D $FB $00)
+[ ] scr() can't be part of expressions in e.g lda #scr(' ')
 
 
 #BUGs
@@ -24,3 +25,4 @@
 [X] listing repeats macro line
 [X] Macros report local labels as undefined if they're passed in as a param
 [X] Undefined labels should be reported at reference sites, not the end of the code.
+[X] Word constants are not always 2 bytes
