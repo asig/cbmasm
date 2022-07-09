@@ -721,15 +721,15 @@ func (a *Assembler) handleMacroInstantiation(m *macro, callPos text.Pos) {
 
 type emptyErrorSink int
 
-func (e *emptyErrorSink) AddError(pos text.Pos, message string, args ...interface{}) {
+func (e *emptyErrorSink) AddError(_ text.Pos, _ string, _ ...interface{}) {
 }
 
 func extractLocalLabels(actParam string) []string {
 	// Simple heuristic: Ignore everything that is not a local label/Replace all non-label chars with a space, collect all the labels
 	var labels []string
-	text := text.Process("", actParam)
+	txt := text.Process("", actParam)
 	var sink emptyErrorSink
-	s := scanner.New(text.Lines[0], &sink)
+	s := scanner.New(txt.Lines[0], &sink)
 	for {
 		t := s.Scan()
 		if t.Type == scanner.Eol {
@@ -1077,14 +1077,6 @@ func (a *Assembler) dbOp() []expr.Node {
 	}
 }
 
-func wrapWithUnaryOp(nodes []expr.Node, op expr.UnaryOp) []expr.Node {
-	var newNodes []expr.Node
-	for _, n := range nodes {
-		newNodes = append(newNodes, expr.NewUnaryOp(n.Pos(), n, op))
-	}
-	return newNodes
-}
-
 func (a *Assembler) basicDbOp() expr.Node {
 	n := a.expr(1, true)
 	return n
@@ -1421,7 +1413,7 @@ func (a *Assembler) reportUnresolvedSymbols(errorPos text.Pos, filterFunc func(s
 	}
 }
 
-func (a *Assembler) reportUnresolvedPatches(errorPos text.Pos, filterFunc func(string) bool) {
+func (a *Assembler) reportUnresolvedPatches(_ text.Pos, filterFunc func(string) bool) {
 	for label, patches := range a.patchesPerLabel {
 		if !filterFunc(label) {
 			continue
