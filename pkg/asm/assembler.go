@@ -621,13 +621,13 @@ func (a *Assembler) setCPU(cpu string) {
 		panic(fmt.Sprintf("Unsupported CPU %s", cpu))
 	}
 	a.symbols.remove("CPU")
-	a.symbols.add(symbol{name: "CPU", val: expr.NewStrConst(text.Pos{}, cpu), kind: symbolConst})
+	a.symbols.add(symbol{name: "CPU", val: expr.NewUnaryOp(text.Pos{}, expr.NewStrConst(text.Pos{}, cpu), expr.AsciiToPetscii), kind: symbolConst})
 	a.currentCPU = cpu
 }
 
 func (a *Assembler) setPlatform(p string) {
 	a.symbols.remove("PLATFORM")
-	a.symbols.add(symbol{name: "PLATFORM", val: expr.NewStrConst(text.Pos{}, strings.ToLower(p)), kind: symbolConst})
+	a.symbols.add(symbol{name: "PLATFORM", val: expr.NewUnaryOp(text.Pos{}, expr.NewStrConst(text.Pos{}, strings.ToLower(p)), expr.AsciiToPetscii), kind: symbolConst})
 	a.currentPlatform = p
 }
 
@@ -1212,9 +1212,9 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 			a.nextToken()
 			a.match(scanner.LParen)
 			n := a.expr(size, stringsAllowed)
-			node := expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode)
+			n = expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode)
 			a.match(scanner.RParen)
-			return node
+			return n
 		}
 		if s, found := a.symbols.get(sym); found {
 			if s.val.IsResolved() {
