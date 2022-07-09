@@ -20,7 +20,7 @@
         ; BASIC header for Commodore 128
         .org $1c01
         .word _next          ; pointer to next line
-        .word 65535          ; line number (65535)
+        .word 1              ; line number (1)
         .byte $9e, "7181",0  ; SYS 7181
 _next   .word 0              ; End of listing
 
@@ -31,7 +31,7 @@ _next   .word 0              ; End of listing
         ; BASIC header for Commodore 64
         .org $801
         .word _next          ; pointer to next line
-        .word 65535          ; line number (65535)
+        .word 1              ; line number (1)
         .byte $9e, "2061",0  ; SYS 2061
 _next   .word 0              ; End of listing
 
@@ -42,7 +42,7 @@ _next   .word 0              ; End of listing
         ; BASIC header for PET
         .org $401
         .word _next          ; pointer to next line
-        .word 65535          ; line number (65535)
+        .word 1              ; line number (1)
         .byte $9e, "1037",0  ; SYS 1037
 _next   .word 0              ; End of listing
 
