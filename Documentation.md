@@ -119,7 +119,7 @@ op := ".macro" [ident {"," ident }]
     | ".platform" string 
     | mnemonic [ param {"," param } ]
     | macroname [ actmacroparam {"," actmacroparam } ]
-.
+    .
                                          
 mnemonic := ident .
 
@@ -130,8 +130,8 @@ actmacroparam := ["#" ["<"|">"]] expr .
 relOp := ["=" | "!=" | "<=" | "<" | ">=" | >"] .
 
 dbOp := ("<"|">") expr 
-      | basicDbOp
-      | "scr" "(" basicDbOp { "," basicDbOp } ")" .
+      | expr
+      .
 
 basicDbOp := expr .
 
@@ -147,7 +147,8 @@ param6502 := "#" ["<"|">"] expr
            | "(" expr "," "X" ")"
            | "(" expr "," "Y" ")"  
            | "(" expr ") ""," "X" 
-           | "(" expr ")" "," "Y"       
+           | "(" expr ")" "," "Y"
+           .       
 
 paramZ80 := ["<"|">"] expr
           | register
@@ -156,6 +157,7 @@ paramZ80 := ["<"|">"] expr
           | "(" ["IX"|"IY"] ["+"|"-"] expr ")"
           | "(" expr ")"
           | expr
+          .
 
 expr := ["-"] term { "+"|"-"|"|" term } .
 term := factor { "*"|"/"|"%"|"&"|"^" factor } . 
@@ -165,7 +167,9 @@ factor := "~" factor
         | string
         | ident 
         | '*'
-        | "(" expr ")" .
+        | "(" expr ")" 
+        | "scr" "(" expr ")" .
+        .
 number  := digit { digit } 
          | "%" binDigit { binDigit }
          | "&" octDigit { octDigit }

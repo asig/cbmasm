@@ -783,3 +783,40 @@ L NOP
 		})
 	}
 }
+
+func TestAssembler_expr(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []byte
+	}{
+		{
+			name: "expr",
+			text: `
+	lda #scr('a')
+	lda #'a'
+`,
+			want: []byte{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assembler := New([]string{}, "6502", "c128", []string{})
+			src := " .org 0\n " + test.text
+			assembler.Assemble(text.Process("", src))
+			errs := assembler.Errors()
+			if len(errs) != 0 {
+				t.Errorf("Got %+v, want 0 errs", errs)
+			}
+			warnings := assembler.Warnings()
+			if len(warnings) != 0 {
+				t.Errorf("Got %+v, want 0 warnings", errs)
+			}
+			got := assembler.GetBytes()
+			if bytes.Compare(got, test.want) != 0 {
+				t.Errorf("Got %s, want %s", toString(got), toString(test.want))
+			}
+		})
+	}
+}

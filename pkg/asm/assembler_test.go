@@ -198,6 +198,20 @@ _l1   brk
 		// TODO add test for unresolved local labels
 
 		{
+			name: "screen codes",
+			text: `   .org 0
+	.byte scr("hello")
+	.byte scr("h"), scr("e"), scr("l"), scr("l"), scr("o")
+	.byte scr('h'), scr('e'), scr('l'), scr('l'), scr('o')
+`,
+			want: []byte{
+				0x08, 0x05, 0x0c, 0x0c, 0x0f,
+				0x08, 0x05, 0x0c, 0x0c, 0x0f,
+				0x08, 0x05, 0x0c, 0x0c, 0x0f,
+			},
+		},
+
+		{
 			name: "byte constants",
 			text: `   .org 0
 	.byte $01,$02,$03,$04

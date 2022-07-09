@@ -1072,19 +1072,6 @@ func (a *Assembler) dbOp() []expr.Node {
 		a.nextToken()
 		n := a.expr(1, false)
 		return []expr.Node{expr.NewUnaryOp(p, n, expr.HiByte)}
-	case a.lookahead.Type == scanner.Ident && strings.ToLower(a.lookahead.StrVal) == "scr":
-		// "scr" "(" basicDbOp { "," basicDbOp } ")"
-		a.nextToken()
-		a.match(scanner.LParen)
-		n := a.basicDbOp()
-		nodes := []expr.Node{expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode)}
-		for a.lookahead.Type == scanner.Comma {
-			a.nextToken()
-			n = a.basicDbOp()
-			nodes = append(nodes, expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode))
-		}
-		a.match(scanner.RParen)
-		return nodes
 	default:
 		return []expr.Node{a.basicDbOp()}
 	}
@@ -1100,9 +1087,6 @@ func wrapWithUnaryOp(nodes []expr.Node, op expr.UnaryOp) []expr.Node {
 
 func (a *Assembler) basicDbOp() expr.Node {
 	n := a.expr(1, true)
-	if n.Type() == expr.NodeType_String {
-		n = expr.NewUnaryOp(n.Pos(), n, expr.AsciiToPetscii)
-	}
 	return n
 }
 
@@ -1187,7 +1171,7 @@ func (a *Assembler) term(size int, stringsAllowed bool) expr.Node {
 }
 
 func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
-	// factor := "~" factor | number | char-const | string | ident | "*'.
+	// factor := "~" factor | number | char-const | string | ident | "*' | "scr" "(" expr ")".
 	var node expr.Node
 	switch a.lookahead.Type {
 	case scanner.Tilde:
@@ -1221,7 +1205,7 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 		p := a.lookahead.Pos
 		str := a.lookahead.StrVal
 		if stringsAllowed {
-			node = expr.NewStrConst(p, str)
+			node = expr.NewUnaryOp(p, expr.NewStrConst(p, str), expr.AsciiToPetscii)
 		} else {
 			a.AddError(p, "Strings are not allowed")
 			node = expr.NewConst(p, 0, 1)
@@ -1231,6 +1215,15 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 		p := a.lookahead.Pos
 		sym := a.lookahead.StrVal
 		node = nil
+		if strings.ToLower(sym) == "scr" {
+			// "scr" "(" expr ")"
+			a.nextToken()
+			a.match(scanner.LParen)
+			n := a.expr(size, stringsAllowed)
+			node := expr.NewUnaryOp(n.Pos(), n, expr.ScreenCode)
+			a.match(scanner.RParen)
+			return node
+		}
 		if s, found := a.symbols.get(sym); found {
 			if s.val.IsResolved() {
 				switch s.val.Type() {
