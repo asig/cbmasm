@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/asig/cbmasm/pkg/asm"
+	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 	"io/ioutil"
 	"log"
@@ -156,6 +157,8 @@ func main() {
 
 	inputFilename := "<stdin>"
 	outputFilename := "<stdout>"
+
+	var errs []errors.Error
 	var err error
 	inputFile := os.Stdin
 	outputFile := os.Stdout
@@ -173,7 +176,12 @@ func main() {
 		if err != nil {
 			log.Fatalf("Can't open output file %q.", outputFilename)
 		}
-		defer outputFile.Close()
+		defer func() {
+			outputFile.Close()
+			if len(errs) > 0 {
+				os.Remove(outputFilename)
+			}
+		}()
 	} else {
 		// Oytput is written to stdout, don't use it for status updates
 		statusOutput = errorOutput
@@ -191,10 +199,10 @@ func main() {
 
 	assembler := asm.New(flagIncludeDirs, *flagCPU, *flagPlatform, flagDefines)
 	assembler.Assemble(t)
-	errors := assembler.Errors()
-	if len(errors) > 0 {
-		errorOutput.Printf("%d errors occurred:\n", len(errors))
-		for _, e := range errors {
+	errs = assembler.Errors()
+	if len(errs) > 0 {
+		errorOutput.Printf("%d errors occurred:\n", len(errs))
+		for _, e := range errs {
 			errorOutput.Printf("%s\n", e)
 		}
 	}
@@ -205,7 +213,7 @@ func main() {
 			fmt.Printf("%s\n", e)
 		}
 	}
-	if len(errors) != 0 {
+	if len(errs) != 0 {
 		return
 	}
 
