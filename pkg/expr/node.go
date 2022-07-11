@@ -31,6 +31,30 @@ const (
 	NodeType_String
 )
 
+func (n NodeType) Name() string {
+	switch n {
+	case NodeType_Int:
+		return "int"
+	case NodeType_Float:
+		return "float"
+	case NodeType_String:
+		return "string"
+	}
+	panic("Can't happen")
+}
+
+func (n NodeType) NewPlaceholderConst(p text.Pos) Node {
+	switch n {
+	case NodeType_Int:
+		return NewConst(p, 1, 1)
+	case NodeType_Float:
+		return NewFloatConst(p, 1)
+	case NodeType_String:
+		return NewStrConst(p, "")
+	}
+	panic("Can't happen")
+}
+
 func (n NodeType) IsNumeric() bool {
 	return n == NodeType_Int || n == NodeType_Float
 }

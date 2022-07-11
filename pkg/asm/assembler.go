@@ -332,6 +332,7 @@ func (a *Assembler) processLine() (addToListing bool) {
 				a.AddError(p, "expression is not resolved")
 				e = expr.NewConst(p, 1, 1)
 			}
+			e = a.checkType(e, expr.NodeType_Int)
 			a.assemblyEnabled.push(a.assemblyEnabled.top() && (e.Eval() != 0))
 
 		case scanner.Else:
@@ -514,6 +515,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			a.AddError(t.Pos, "Can't use forward declarations in .align")
 			return
 		}
+		node = a.checkType(node, expr.NodeType_Int)
 		n := node.Eval()
 		toAdd := n - (a.section.PC() % n)
 		for toAdd > 0 {
@@ -1279,6 +1281,14 @@ func (a *Assembler) checkRange(n expr.Node) {
 			a.AddError(n.Pos(), "Branch target too far away.")
 		}
 	}
+}
+
+func (a *Assembler) checkType(n expr.Node, t expr.NodeType) expr.Node {
+	if n.Type() != t {
+		a.AddError(n.Pos(), "Expression needs to be of type %q.", t.Name())
+		return t.NewPlaceholderConst(n.Pos())
+	}
+	return n
 }
 
 func (a *Assembler) emitNode(n expr.Node) {
