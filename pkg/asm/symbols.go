@@ -20,8 +20,9 @@ package asm
 
 import (
 	"fmt"
-	"github.com/asig/cbmasm/pkg/expr"
 	"strings"
+
+	"github.com/asig/cbmasm/pkg/expr"
 )
 
 type symbolKind int

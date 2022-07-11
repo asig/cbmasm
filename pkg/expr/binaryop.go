@@ -20,6 +20,7 @@ package expr
 
 import (
 	"fmt"
+
 	"github.com/asig/cbmasm/pkg/errors"
 	"github.com/asig/cbmasm/pkg/text"
 )

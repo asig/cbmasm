@@ -21,15 +21,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/asig/cbmasm/pkg/asm"
-	"github.com/asig/cbmasm/pkg/errors"
-	"github.com/asig/cbmasm/pkg/text"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/asig/cbmasm/pkg/asm"
+	"github.com/asig/cbmasm/pkg/errors"
+	"github.com/asig/cbmasm/pkg/text"
 )
 
 var (
