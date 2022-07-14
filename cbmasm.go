@@ -69,7 +69,8 @@ var (
 	flagIncludeDirs pathListFlag
 	flagDefines     stringArrayFlag
 	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
-	flagDumpLabels  = flag.Bool("dump_labels", true, "If true, the labels will be printed.")
+	flagDumpLabels  = flag.Bool("dump_labels", false, "If true, the labels will be printed to stdout.")
+	flagLabels      = flag.String("labels", "", "If set, a VICE-compatible 'labels' file is generated.")
 	flagListing     = flag.Bool("listing", false, "If true, a listing is generated.")
 	flagCPU         = flag.String("cpu", "6502", fmt.Sprintf("CPU to assemble code for. Supported values are: %s", strings.Join(asm.SupportedCPUs, ", ")))
 	flagPlatform    = flag.String("platform", "c128", fmt.Sprintf("Target platform. Supported values are: %s", strings.Join(asm.SupportedPlatforms, ", ")))
@@ -103,6 +104,27 @@ func printLabels(a *asm.Assembler) {
 		statusOutput.Printf("%s: $%04x\n", n, val)
 	}
 	statusOutput.Println()
+}
+
+func saveViceLabels(a *asm.Assembler, filename string) {
+	out, err := os.Create(filename)
+	if err != nil {
+		log.Printf("Can't open output file %q.", filename)
+		return
+	}
+	labels := a.Labels()
+	var symtab []string
+	for n, addr := range labels {
+		if !strings.HasPrefix(n, ".") {
+			n = "." + n
+		}
+		symtab = append(symtab, fmt.Sprintf("al C:%04x %s\n", addr, n))
+	}
+	sort.Strings(symtab)
+	for _, l := range symtab {
+		out.WriteString(l)
+	}
+	out.Close()
 }
 
 func printListing(a *asm.Assembler) {
@@ -230,6 +252,10 @@ func main() {
 	}
 	if *flagListing {
 		printListing(assembler)
+	}
+	if *flagLabels != "" {
+		saveViceLabels(assembler, *flagLabels)
+		statusOutput.Printf("Symbols written to %q.", *flagLabels)
 	}
 
 	statusOutput.Printf("%d bytes written to %q.", len(bytes), outputFilename)
