@@ -47,19 +47,14 @@ L NOP
 			want: []byte{0xea, 0x50, 0xfd, 0x70, 0xfb, 0x30, 0xf9, 0x10, 0xf7, 0x90, 0xf5, 0xb0, 0xf3, 0xd0, 0xf1, 0xf0, 0xef},
 		},
 		{
-			name: "Single instruction ADC $0056",
-			text: "ADC $0056",
-			want: []byte{0x6D, 0x56, 0x00},
-		},
-		{
 			name: "Single instruction ADC $0078",
 			text: "ADC $0078",
-			want: []byte{0x6D, 0x78, 0x00},
+			want: []byte{0x65, 0x78},
 		},
 		{
 			name: "Single instruction ADC $0078,X",
 			text: "ADC $0078,X",
-			want: []byte{0x7D, 0x78, 0x00},
+			want: []byte{0x75, 0x78},
 		},
 		{
 			name: "Single instruction ADC $1234",
@@ -89,17 +84,17 @@ L NOP
 		{
 			name: "Single instruction AND $0056",
 			text: "AND $0056",
-			want: []byte{0x2D, 0x56, 0x00},
+			want: []byte{0x25, 0x56},
 		},
 		{
 			name: "Single instruction AND $0078",
 			text: "AND $0078",
-			want: []byte{0x2D, 0x78, 0x00},
+			want: []byte{0x25, 0x78},
 		},
 		{
 			name: "Single instruction AND $0078,X",
 			text: "AND $0078,X",
-			want: []byte{0x3D, 0x78, 0x00},
+			want: []byte{0x35, 0x78},
 		},
 		{
 			name: "Single instruction AND $1234",
@@ -129,12 +124,12 @@ L NOP
 		{
 			name: "Single instruction ASL $0078",
 			text: "ASL $0078",
-			want: []byte{0x0E, 0x78, 0x00},
+			want: []byte{0x06, 0x78},
 		},
 		{
 			name: "Single instruction ASL $0078,X",
 			text: "ASL $0078,X",
-			want: []byte{0x1E, 0x78, 0x00},
+			want: []byte{0x16, 0x78},
 		},
 		{
 			name: "Single instruction ASL $1234",
@@ -154,7 +149,7 @@ L NOP
 		{
 			name: "Single instruction BIT $0078",
 			text: "BIT $0078",
-			want: []byte{0x2C, 0x78, 0x00},
+			want: []byte{0x24, 0x78},
 		},
 		{
 			name: "Single instruction BIT $1234",
@@ -189,17 +184,17 @@ L NOP
 		{
 			name: "Single instruction CMP $0056",
 			text: "CMP $0056",
-			want: []byte{0xCD, 0x56, 0x00},
+			want: []byte{0xC5, 0x56},
 		},
 		{
 			name: "Single instruction CMP $0078",
 			text: "CMP $0078",
-			want: []byte{0xCD, 0x78, 0x00},
+			want: []byte{0xC5, 0x78},
 		},
 		{
 			name: "Single instruction CMP $0078,X",
 			text: "CMP $0078,X",
-			want: []byte{0xDD, 0x78, 0x00},
+			want: []byte{0xD5, 0x78},
 		},
 		{
 			name: "Single instruction CMP $1234",
@@ -229,12 +224,12 @@ L NOP
 		{
 			name: "Single instruction CPX $0056",
 			text: "CPX $0056",
-			want: []byte{0xEC, 0x56, 0x00},
+			want: []byte{0xE4, 0x56},
 		},
 		{
 			name: "Single instruction CPX $0078",
 			text: "CPX $0078",
-			want: []byte{0xEC, 0x78, 0x00},
+			want: []byte{0xE4, 0x78},
 		},
 		{
 			name: "Single instruction CPX $1234",
@@ -244,12 +239,12 @@ L NOP
 		{
 			name: "Single instruction CPY $0056",
 			text: "CPY $0056",
-			want: []byte{0xCC, 0x56, 0x00},
+			want: []byte{0xC4, 0x56},
 		},
 		{
 			name: "Single instruction CPY $0078",
 			text: "CPY $0078",
-			want: []byte{0xCC, 0x78, 0x00},
+			want: []byte{0xC4, 0x78},
 		},
 		{
 			name: "Single instruction CPY $1234",
@@ -259,12 +254,12 @@ L NOP
 		{
 			name: "Single instruction DEC $0078",
 			text: "DEC $0078",
-			want: []byte{0xCE, 0x78, 0x00},
+			want: []byte{0xC6, 0x78},
 		},
 		{
 			name: "Single instruction DEC $0078,X",
 			text: "DEC $0078,X",
-			want: []byte{0xDE, 0x78, 0x00},
+			want: []byte{0xD6, 0x78},
 		},
 		{
 			name: "Single instruction DEC $1234",
@@ -289,17 +284,17 @@ L NOP
 		{
 			name: "Single instruction EOR $0056",
 			text: "EOR $0056",
-			want: []byte{0x4D, 0x56, 0x00},
+			want: []byte{0x45, 0x56},
 		},
 		{
 			name: "Single instruction EOR $0078",
 			text: "EOR $0078",
-			want: []byte{0x4D, 0x78, 0x00},
+			want: []byte{0x45, 0x78},
 		},
 		{
 			name: "Single instruction EOR $0078,X",
 			text: "EOR $0078,X",
-			want: []byte{0x5D, 0x78, 0x00},
+			want: []byte{0x55, 0x78},
 		},
 		{
 			name: "Single instruction EOR $1234",
@@ -329,12 +324,12 @@ L NOP
 		{
 			name: "Single instruction INC $0078",
 			text: "INC $0078",
-			want: []byte{0xEE, 0x78, 0x00},
+			want: []byte{0xE6, 0x78},
 		},
 		{
 			name: "Single instruction INC $0078,X",
 			text: "INC $0078,X",
-			want: []byte{0xFE, 0x78, 0x00},
+			want: []byte{0xF6, 0x78},
 		},
 		{
 			name: "Single instruction INC $1234",
@@ -374,17 +369,17 @@ L NOP
 		{
 			name: "Single instruction LDA $0056",
 			text: "LDA $0056",
-			want: []byte{0xAD, 0x56, 0x00},
+			want: []byte{0xA5, 0x56},
 		},
 		{
 			name: "Single instruction LDA $0078",
 			text: "LDA $0078",
-			want: []byte{0xAD, 0x78, 0x00},
+			want: []byte{0xA5, 0x78},
 		},
 		{
 			name: "Single instruction LDA $0078,X",
 			text: "LDA $0078,X",
-			want: []byte{0xBD, 0x78, 0x00},
+			want: []byte{0xB5, 0x78},
 		},
 		{
 			name: "Single instruction LDA $1234",
@@ -414,17 +409,17 @@ L NOP
 		{
 			name: "Single instruction LDX $0056",
 			text: "LDX $0056",
-			want: []byte{0xAE, 0x56, 0x00},
+			want: []byte{0xA6, 0x56},
 		},
 		{
 			name: "Single instruction LDX $0078",
 			text: "LDX $0078",
-			want: []byte{0xAE, 0x78, 0x00},
+			want: []byte{0xA6, 0x78},
 		},
 		{
 			name: "Single instruction LDX $0078,Y",
 			text: "LDX $0078,Y",
-			want: []byte{0xBE, 0x78, 0x00},
+			want: []byte{0xB6, 0x78},
 		},
 		{
 			name: "Single instruction LDX $1234",
@@ -439,17 +434,17 @@ L NOP
 		{
 			name: "Single instruction LDY $0056",
 			text: "LDY $0056",
-			want: []byte{0xAC, 0x56, 0x00},
+			want: []byte{0xA4, 0x56},
 		},
 		{
 			name: "Single instruction LDY $0078",
 			text: "LDY $0078",
-			want: []byte{0xAC, 0x78, 0x00},
+			want: []byte{0xA4, 0x78},
 		},
 		{
 			name: "Single instruction LDY $0078,X",
 			text: "LDY $0078,X",
-			want: []byte{0xBC, 0x78, 0x00},
+			want: []byte{0xB4, 0x78},
 		},
 		{
 			name: "Single instruction LDY $1234",
@@ -464,12 +459,12 @@ L NOP
 		{
 			name: "Single instruction LSR $0078",
 			text: "LSR $0078",
-			want: []byte{0x4E, 0x78, 0x00},
+			want: []byte{0x46, 0x78},
 		},
 		{
 			name: "Single instruction LSR $0078,X",
 			text: "LSR $0078,X",
-			want: []byte{0x5E, 0x78, 0x00},
+			want: []byte{0x56, 0x78},
 		},
 		{
 			name: "Single instruction LSR $1234",
@@ -494,17 +489,17 @@ L NOP
 		{
 			name: "Single instruction ORA $0056",
 			text: "ORA $0056",
-			want: []byte{0x0D, 0x56, 0x00},
+			want: []byte{0x05, 0x56},
 		},
 		{
 			name: "Single instruction ORA $0078",
 			text: "ORA $0078",
-			want: []byte{0x0D, 0x78, 0x00},
+			want: []byte{0x05, 0x78},
 		},
 		{
 			name: "Single instruction ORA $0078,X",
 			text: "ORA $0078,X",
-			want: []byte{0x1D, 0x78, 0x00},
+			want: []byte{0x15, 0x78},
 		},
 		{
 			name: "Single instruction ORA $1234",
@@ -554,12 +549,12 @@ L NOP
 		{
 			name: "Single instruction ROL $0078",
 			text: "ROL $0078",
-			want: []byte{0x2E, 0x78, 0x00},
+			want: []byte{0x26, 0x78},
 		},
 		{
 			name: "Single instruction ROL $0078,X",
 			text: "ROL $0078,X",
-			want: []byte{0x3E, 0x78, 0x00},
+			want: []byte{0x36, 0x78},
 		},
 		{
 			name: "Single instruction ROL $1234",
@@ -579,12 +574,12 @@ L NOP
 		{
 			name: "Single instruction ROR $0078",
 			text: "ROR $0078",
-			want: []byte{0x6E, 0x78, 0x00},
+			want: []byte{0x66, 0x78},
 		},
 		{
 			name: "Single instruction ROR $0078,X",
 			text: "ROR $0078,X",
-			want: []byte{0x7E, 0x78, 0x00},
+			want: []byte{0x76, 0x78},
 		},
 		{
 			name: "Single instruction ROR $1234",
@@ -614,17 +609,17 @@ L NOP
 		{
 			name: "Single instruction SBC $0056",
 			text: "SBC $0056",
-			want: []byte{0xED, 0x56, 0x00},
+			want: []byte{0xE5, 0x56},
 		},
 		{
 			name: "Single instruction SBC $0078",
 			text: "SBC $0078",
-			want: []byte{0xED, 0x78, 0x00},
+			want: []byte{0xE5, 0x78},
 		},
 		{
 			name: "Single instruction SBC $0078,X",
 			text: "SBC $0078,X",
-			want: []byte{0xFD, 0x78, 0x00},
+			want: []byte{0xF5, 0x78},
 		},
 		{
 			name: "Single instruction SBC $1234",
@@ -669,12 +664,12 @@ L NOP
 		{
 			name: "Single instruction STA $0078",
 			text: "STA $0078",
-			want: []byte{0x8D, 0x78, 0x00},
+			want: []byte{0x85, 0x78},
 		},
 		{
 			name: "Single instruction STA $0078,X",
 			text: "STA $0078,X",
-			want: []byte{0x9D, 0x78, 0x00},
+			want: []byte{0x95, 0x78},
 		},
 		{
 			name: "Single instruction STA $1234",
@@ -704,7 +699,7 @@ L NOP
 		{
 			name: "Single instruction STX $0078",
 			text: "STX $0078",
-			want: []byte{0x8E, 0x78, 0x00},
+			want: []byte{0x86, 0x78},
 		},
 		{
 			name: "Single instruction STX $1234",
@@ -719,7 +714,7 @@ L NOP
 		{
 			name: "Single instruction STY $0078",
 			text: "STY $0078",
-			want: []byte{0x8C, 0x78, 0x00},
+			want: []byte{0x84, 0x78},
 		},
 		{
 			name: "Single instruction STY $1234",
