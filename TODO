@@ -33,3 +33,6 @@
 [X] Macros report local labels as undefined if they're passed in as a param
 [X] Undefined labels should be reported at reference sites, not the end of the code.
 [X] Word constants are not always 2 bytes
+[ ] byte expressions are forced to a size too early (already during const eval, e.g. "LDA #($1FF-$100)" although it shouldn't )
+[ ] .equs used in macros, but defined afterwards, are not correctly resolved and result in "undef symbol"
+[ ] macro calls ignore garbage at the enf of the line, thez should fail
