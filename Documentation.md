@@ -106,7 +106,7 @@ op := ".macro" [ident {"," ident }]
     | ".else"
     | ".endif"
     | ".include" string
-    | ".incbin" string
+    | ".incbin" string [ "," expr ]
     | ".fail" string
     | ".equ" expr
     | ".org" expr

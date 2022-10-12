@@ -416,6 +416,21 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		p := a.lookahead.Pos
 		filename := a.lookahead.StrVal
 		a.match(scanner.String)
+		skipNode := expr.NewConst(p, 0, 2)
+		if a.lookahead.Type == scanner.Comma {
+			a.nextToken()
+			skipNode = a.expr(2, false)
+			if !skipNode.IsResolved() {
+				a.AddError(skipNode.Pos(), "Expression is not resolved")
+				skipNode = expr.NewConst(skipNode.Pos(), 0, 2)
+			}
+			skipNode = a.checkType(skipNode, expr.NodeType_Int)
+		}
+		skip := skipNode.Eval()
+		if skip < 0 {
+			a.AddError(skipNode.Pos(), "Bytes to skip must be >= 0.")
+			skip = 0
+		}
 		f := a.findIncludeFile(filename)
 		if f == nil {
 			a.AddError(p, "Can't find file %q in include paths.", filename)
@@ -424,7 +439,13 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		data, err := ioutil.ReadFile(*f)
 		if err != nil {
 			a.AddError(p, "Can't read file %q: %s", *f, err)
+		} else {
+			if skip > len(data) {
+				a.AddError(skipNode.Pos(), "Skipping %d bytes, but file only contains %d.", skip, len(data))
+				skip = len(data)
+			}
 		}
+		data = data[skip:]
 		for _, b := range data {
 			a.emit(expr.NewConst(p, int(b), 1))
 		}
