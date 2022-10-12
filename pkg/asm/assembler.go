@@ -507,14 +507,14 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	case scanner.Org:
 		a.nextToken()
 		// set origin
-		orgNode := a.expr(2, false)
+		node := a.expr(2, false)
 		org := 0
-		if orgNode.IsResolved() {
-			org = orgNode.Eval()
-		} else {
+		if !node.IsResolved() {
 			a.AddError(t.Pos, "Can't use forward declarations in .org")
-			org = 0
+			return
 		}
+		node = a.checkType(node, expr.NodeType_Int)
+		org = node.Eval()
 		if a.section != nil {
 			max := a.section.PC()
 			if org < max {
