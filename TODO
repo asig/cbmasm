@@ -18,14 +18,16 @@
 [X] store value of ".cpu" in symbol table
 [X] LDx/STx should use zero page addressing if possible (example: "dp .equ $fb; sta dp" should generate $85 $FB, not $8D $FB $00)
 [X] scr() should be allowed as an expressions in e.g lda #scr(' ')
+[X] incbin: add "skip bytes"
 [ ] expression support
-    [ ] bitwise OR
-    [ ] bitwise AND
-    [ ] bitwise XOR
     [ ] logical OR
     [ ] logical AND
     [ ] logical XOR
 [ ] generate object files and add a linker
+[ ] CP/M assembly
+    [ ] Don't use PETSCII encoding (or let the user choose with ".encoding" pseudo instr?)
+    [ ] Generate proper file header (again, let user choose with pseudo instr?)
+[ ] Add version info, build info
 
 #BUGs
 [X] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro
@@ -35,4 +37,4 @@
 [X] Word constants are not always 2 bytes
 [ ] byte expressions are forced to a size too early (already during const eval, e.g. "LDA #($1FF-$100)" although it shouldn't )
 [ ] .equs used in macros, but defined afterwards, are not correctly resolved and result in "undef symbol"
-[ ] macro calls ignore garbage at the enf of the line, thez should fail
+[ ] macro calls ignore garbage at the enf of the line, they should fail
