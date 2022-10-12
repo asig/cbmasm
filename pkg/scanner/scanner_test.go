@@ -79,7 +79,7 @@ func TestScanner_Scan_floats(t *testing.T) {
 	tests := []struct {
 		name string
 		text text.Line
-		want float32
+		want float64
 	}{
 		{
 			name: "Float",
