@@ -24,10 +24,13 @@
     [ ] logical AND
     [ ] logical XOR
 [ ] generate object files and add a linker
-[ ] CP/M assembly
-    [ ] Don't use PETSCII encoding (or let the user choose with ".encoding" pseudo instr?)
-    [ ] Generate proper file header (again, let user choose with pseudo instr?)
+[X] CP/M assembly
+    [X] Don't use PETSCII encoding (or let the user choose with ".encoding" pseudo instr?)
+    [X] Generate proper file header (again, let user choose with pseudo instr?)
 [ ] Add version info, build info
+
+#Cleanups
+[ ] Introduce types for CPU, Platform, Output, Encoding
 
 #BUGs
 [X] local labels in macros are not cleared when the macro is finished. Potential fix: remove labels that were generated in the macro

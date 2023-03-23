@@ -68,7 +68,8 @@ func (f *pathListFlag) Set(value string) error {
 var (
 	flagIncludeDirs pathListFlag
 	flagDefines     stringArrayFlag
-	flagPlain       = flag.Bool("plain", false, "If true, the load address is not added to the generated code.")
+	flagOutput      = flag.String("output", "prg", fmt.Sprintf("Which output format should be generated. Supported values are: %s", strings.Join(asm.SupportedOutputs, ", ")))
+	flagEncoding    = flag.String("encoding", "petscii", fmt.Sprintf("Which encoding should be used. Supported values are: %s", strings.Join(asm.SupportedEncodings, ", ")))
 	flagDumpLabels  = flag.Bool("dump_labels", false, "If true, the labels will be printed to stdout.")
 	flagLabels      = flag.String("labels", "", "If set, a VICE-compatible 'labels' file is generated.")
 	flagListing     = flag.Bool("listing", false, "If true, a listing is generated.")
@@ -169,6 +170,18 @@ func init() {
 		os.Exit(1)
 	}
 
+	if !asm.IsSupportedOutput(*flagOutput) {
+		errorOutput.Printf("Unsupported output %q. Valid outputs are: %s.", *flagOutput, strings.Join(asm.SupportedOutputs, ", "))
+		usage()
+		os.Exit(1)
+	}
+
+	if !asm.IsSupportedEncoding(*flagEncoding) {
+		errorOutput.Printf("Unsupported encoding %q. Valid encodings are: %s.", *flagEncoding, strings.Join(asm.SupportedEncodings, ", "))
+		usage()
+		os.Exit(1)
+	}
+
 	if len(flagIncludeDirs) == 0 {
 		// default to "." if no include dirs are set.
 		flagIncludeDirs = pathListFlag{"."}
@@ -220,7 +233,7 @@ func main() {
 
 	t := text.Process(inputFilename, string(raw))
 
-	assembler := asm.New(flagIncludeDirs, *flagCPU, *flagPlatform, flagDefines)
+	assembler := asm.New(flagIncludeDirs, *flagCPU, *flagPlatform, *flagOutput, *flagEncoding, flagDefines)
 	assembler.Assemble(t)
 	errs = assembler.Errors()
 	if len(errs) > 0 {
@@ -240,7 +253,8 @@ func main() {
 		return
 	}
 
-	if !*flagPlain {
+	output := assembler.CurrentOutput()
+	if output == "prg" {
 		o := assembler.Origin()
 		outputFile.Write([]byte{byte(o & 0xff), byte((o >> 8) & 0xff)})
 	}

@@ -58,7 +58,7 @@ l:
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
 			assembler.Assemble(text.Process("", test.text))
 			errs := assembler.Errors()
 			if len(errs) != len(test.wantErrors) {
@@ -105,7 +105,7 @@ func TestAssembler_BadFloatConst(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
 			assembler.Assemble(text.Process("", test.text))
 			errs := assembler.Errors()
 			if len(errs) != len(test.wantErrors) {
@@ -388,11 +388,24 @@ dp	.equ $fb
 `,
 			want: []byte{0xa5, 0xfb, 0x85, 0xfb, 0xa6, 0xfb, 0x86, 0xfb, 0xa4, 0xfb, 0x84, 0xfb},
 		},
+
+		{
+			name: "Encodings",
+			text: ` .org 0
+	.encoding "ascii"
+	.byte "hello, world!"
+	.encoding "petscii"
+	.byte "hello, world!"
+`,
+			want: []byte{
+				0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x2c, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21,
+				0x48, 0x45, 0x4c, 0x4c, 0x4f, 0x2c, 0x20, 0x57, 0x4f, 0x52, 0x4c, 0x44, 0x21},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
 			assembler.Assemble(text.Process("", test.text))
 
 			errs := assembler.Errors()

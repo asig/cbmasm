@@ -93,6 +93,12 @@ TODO
 ### `.platform`
 TODO
 
+### `.encoding`
+TODO
+
+### `.output`
+TODO
+
 # Syntax
 
 ```
@@ -117,6 +123,8 @@ op := ".macro" [ident {"," ident }]
     | ".reserve" expr ["," dbOp ]
     | ".cpu" string 
     | ".platform" string 
+    | ".encoding" string
+    | ".output" string
     | mnemonic [ param {"," param } ]
     | macroname [ actmacroparam {"," actmacroparam } ]
     .

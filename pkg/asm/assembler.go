@@ -37,26 +37,34 @@ import (
 var (
 	SupportedPlatforms = []string{"c128", "c64", "pet"}
 	SupportedCPUs      = []string{"6502", "z80"}
+	SupportedOutputs   = []string{"plain", "prg"}
+	SupportedEncodings = []string{"petscii", "ascii"}
 )
 
-func IsSupportedPlatform(s string) bool {
-	s = strings.ToLower(s)
-	for _, p := range SupportedPlatforms {
-		if s == p {
+func listContains(l []string, val string) bool {
+	val = strings.ToLower(val)
+	for _, s := range l {
+		if val == s {
 			return true
 		}
 	}
 	return false
 }
 
+func IsSupportedPlatform(s string) bool {
+	return listContains(SupportedPlatforms, s)
+}
+
 func IsSupportedCPU(s string) bool {
-	s = strings.ToLower(s)
-	for _, p := range SupportedCPUs {
-		if s == p {
-			return true
-		}
-	}
-	return false
+	return listContains(SupportedCPUs, s)
+}
+
+func IsSupportedOutput(s string) bool {
+	return listContains(SupportedOutputs, s)
+}
+
+func IsSupportedEncoding(s string) bool {
+	return listContains(SupportedEncodings, s)
 }
 
 func IsValidPlatformCPUCombo(platform, cpu string) bool {
@@ -115,6 +123,8 @@ type Assembler struct {
 	defines         symbolTable
 	defaultPlatform string
 	defaultCPU      string
+	defaultOutput   string
+	defaultEncoding string
 
 	// All following fields are reset in Assemble()
 	errorModifier   errors.Modifier
@@ -132,6 +142,8 @@ type Assembler struct {
 
 	currentPlatform string
 	currentCPU      string
+	currentOutput   string
+	currentEncoding expr.UnaryOp
 
 	ListingLines []ListingLine
 
@@ -153,12 +165,14 @@ type Assembler struct {
 	emitted int
 }
 
-func New(includePaths []string, defaultCPU string, defaultPlatform string, defines []string) *Assembler {
+func New(includePaths []string, defaultCPU string, defaultPlatform string, defaultOutput string, defaultEncoding string, defines []string) *Assembler {
 	a := &Assembler{
 		includePaths:    includePaths,
 		defines:         newSymbolTable(),
 		defaultCPU:      defaultCPU,
 		defaultPlatform: defaultPlatform,
+		defaultOutput:   defaultOutput,
+		defaultEncoding: defaultEncoding,
 	}
 	for _, d := range defines {
 		a.defines.add(symbol{name: d, val: expr.NewConst(text.Pos{}, 1, 1), kind: symbolConst})
@@ -179,7 +193,8 @@ func (a *Assembler) Assemble(t text.Text) {
 
 	a.setCPU(a.defaultCPU)
 	a.setPlatform(a.defaultPlatform)
-
+	a.setOutput(a.defaultOutput)
+	a.setEncoding(a.defaultEncoding)
 	for _, val := range a.defines.symbols() {
 		if err := a.addSymbol(val.name, val.kind, val.val); err != nil {
 			a.AddError(text.Pos{}, err.Error())
@@ -581,6 +596,27 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		} else {
 			a.setPlatform(platform)
 		}
+	case scanner.Output:
+		// TODO(asigner): Should we disallow multiple .output occurences?
+		a.nextToken()
+		output := a.lookahead.StrVal
+		pos := a.lookahead.Pos
+		a.match(scanner.String)
+		if !IsSupportedOutput(output) {
+			a.AddError(pos, "Unknown output %q", output)
+		} else {
+			a.setOutput(output)
+		}
+	case scanner.Encoding:
+		a.nextToken()
+		encoding := a.lookahead.StrVal
+		pos := a.lookahead.Pos
+		a.match(scanner.String)
+		if !IsSupportedEncoding(encoding) {
+			a.AddError(pos, "Unknown encoding %q", encoding)
+		} else {
+			a.setEncoding(encoding)
+		}
 	case scanner.Fail:
 		a.nextToken()
 		s := a.lookahead.StrVal
@@ -633,6 +669,17 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 	return addToListing
 }
 
+func (a *Assembler) updatePredefinedSymbol(name, value string) {
+	a.symbols.remove(name)
+	a.symbols.add(symbol{name: name, val: expr.NewUnaryOp(text.Pos{}, expr.NewStrConst(text.Pos{}, value), a.currentEncoding), kind: symbolConst})
+}
+
+func (a *Assembler) updatePredefinedSymbols() {
+	a.updatePredefinedSymbol("CPU", a.currentCPU)
+	a.updatePredefinedSymbol("PLATFORM", a.currentPlatform)
+	a.updatePredefinedSymbol("OUTPUT", a.currentOutput)
+}
+
 func (a *Assembler) setCPU(cpu string) {
 	cpu = strings.ToLower(cpu)
 	switch cpu {
@@ -643,15 +690,34 @@ func (a *Assembler) setCPU(cpu string) {
 	default:
 		panic(fmt.Sprintf("Unsupported CPU %s", cpu))
 	}
-	a.symbols.remove("CPU")
-	a.symbols.add(symbol{name: "CPU", val: expr.NewUnaryOp(text.Pos{}, expr.NewStrConst(text.Pos{}, cpu), expr.AsciiToPetscii), kind: symbolConst})
 	a.currentCPU = cpu
+	a.updatePredefinedSymbols()
 }
 
 func (a *Assembler) setPlatform(p string) {
-	a.symbols.remove("PLATFORM")
-	a.symbols.add(symbol{name: "PLATFORM", val: expr.NewUnaryOp(text.Pos{}, expr.NewStrConst(text.Pos{}, strings.ToLower(p)), expr.AsciiToPetscii), kind: symbolConst})
 	a.currentPlatform = p
+	a.updatePredefinedSymbols()
+}
+
+func (a *Assembler) setOutput(o string) {
+	a.currentOutput = o
+	a.updatePredefinedSymbols()
+}
+
+func (a *Assembler) setEncoding(e string) {
+	switch e {
+	case "ascii":
+		a.currentEncoding = expr.NoOp
+	case "petscii":
+		a.currentEncoding = expr.AsciiToPetscii
+	default:
+		panic(fmt.Sprintf("Unsupported encoding %q", e))
+	}
+	a.updatePredefinedSymbols()
+}
+
+func (a *Assembler) CurrentOutput() string {
+	return a.currentOutput
 }
 
 func (a *Assembler) macroParam() {
@@ -1214,13 +1280,13 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 	case scanner.Char:
 		p := a.lookahead.Pos
 		val := a.lookahead.StrVal
-		node = expr.NewUnaryOp(p, expr.NewConst(p, int(val[0]), size), expr.AsciiToPetscii)
+		node = expr.NewUnaryOp(p, expr.NewConst(p, int(val[0]), size), a.currentEncoding)
 		a.nextToken()
 	case scanner.String:
 		p := a.lookahead.Pos
 		str := a.lookahead.StrVal
 		if stringsAllowed {
-			node = expr.NewUnaryOp(p, expr.NewStrConst(p, str), expr.AsciiToPetscii)
+			node = expr.NewUnaryOp(p, expr.NewStrConst(p, str), a.currentEncoding)
 		} else {
 			a.AddError(p, "Strings are not allowed")
 			node = expr.NewConst(p, 0, 1)

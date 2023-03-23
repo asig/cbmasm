@@ -70,6 +70,11 @@ var (
 		},
 		size: func(n Node) int { return n.ResultSize() },
 	}
+	NoOp = UnaryOp{
+		transformation:    func(v int) int { return v },
+		transformationStr: func(v string) string { return v },
+		size:              func(n Node) int { return n.ResultSize() },
+	}
 )
 
 type UnaryOpNode struct {

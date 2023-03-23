@@ -760,7 +760,7 @@ L NOP
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
 			src := " .org 0\n " + test.text
 			assembler.Assemble(text.Process("", src))
 			errs := assembler.Errors()
@@ -791,13 +791,13 @@ func TestAssembler_expr(t *testing.T) {
 	lda #scr('a')
 	lda #'a'
 `,
-			want: []byte{},
+			want: []byte{0xa9, 0x01, 0xa9, 0x41},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assembler := New([]string{}, "6502", "c128", []string{})
+			assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
 			src := " .org 0\n " + test.text
 			assembler.Assemble(text.Process("", src))
 			errs := assembler.Errors()

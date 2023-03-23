@@ -1063,7 +1063,7 @@ foo: NOP
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			src := " .org 0\n " + test.text
-			assembler := New([]string{}, "z80", "c128", []string{})
+			assembler := New([]string{}, "z80", "c128", "plain", "petscii", []string{})
 			assembler.Assemble(text.Process("", src))
 			errs := assembler.Errors()
 			if len(errs) != 0 {

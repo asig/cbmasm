@@ -123,6 +123,16 @@ func TestScanner_Scan_strings(t *testing.T) {
 			text: text.Process("filename", `"What\\ever!"`).Lines[0],
 			want: `What\ever!`,
 		},
+		{
+			name: "New line",
+			text: text.Process("filename", `"\n"`).Lines[0],
+			want: string([]byte{0x0a}),
+		},
+		{
+			name: "Carriage Return",
+			text: text.Process("filename", `"\r"`).Lines[0],
+			want: string([]byte{0x0d}),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

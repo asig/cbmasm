@@ -79,6 +79,8 @@ const (
 	Align
 	Macro
 	Endm
+	Encoding
+	Output
 
 	Eol
 )
@@ -103,6 +105,8 @@ var identToTokenType = map[string]TokenType{
 	".align":    Align,
 	".macro":    Macro,
 	".endm":     Endm,
+	".encoding": Encoding,
+	".output":   Output,
 }
 
 var tokenTypeToString = map[TokenType]string{
@@ -152,6 +156,8 @@ var tokenTypeToString = map[TokenType]string{
 	Align:     ".align",
 	Macro:     ".macro",
 	Endm:      ".endm",
+	Encoding:  ".encoding",
+	Output:    ".output",
 	Eol:       "EOL",
 }
 
@@ -435,6 +441,8 @@ func (scanner *Scanner) readString(separator rune) string {
 				s = s + string(ch)
 			case 'n':
 				s = s + "\n"
+			case 'r':
+				s = s + "\r"
 			case 't':
 				s = s + "\t"
 			case 'b':
