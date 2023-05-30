@@ -48,6 +48,6 @@ loop
         jmp loop
 
         ; Use tools/sidconv to convert a sid file to asm source
-        .include "scapelands_4000.i"
+        .include "Empty_512_bytes_4000.i"
 
 
