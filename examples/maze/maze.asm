@@ -32,18 +32,27 @@ DEBUG_COL   .macro col
             .endif
             .endm
 
-ptr1    .equ $fa ; $fa/$fb zero page address used for memory indexing
-ptr2    .equ $fc ; $fc/$fd zero page address used for memory indexing
+        .if PLATFORM = "c128"
+ptr1    .equ $c8 ; abusing RS-232 input buffer
+ptr2    .equ $ca ; abusing RS-232 output buffer
+        .else
+ptr1    .equ $f7 ; abusing RS-232 input buffer
+ptr2    .equ $f9 ; abusing RS-232 output buffer
+        .endif
+ptr_rasterhandlers  .equ $fb
 
 rasterline0 .equ 30             ; set vscroll
 rasterline1 .equ 50             ; Switch to DGREY
 rasterline2 .equ 60             ; Switch to GREY
 rasterline3 .equ 65             ; Switch to LGREY
 rasterline4 .equ 70             ; Switch to WHITE
-rasterline5 .equ 50-4+20*8-20   ; Switch to LGREY
-rasterline6 .equ 50-4+20*8-15   ; Switch to GREY
-rasterline7 .equ 50-4+20*8-10   ; Switch to DGREY
-rasterline8 .equ 50-4+20*8      ; Switch to BLACK
+
+rasterline5 .equ 80             ; Play song
+
+rasterline6 .equ 50-4+20*8-20   ; Switch to LGREY
+rasterline7 .equ 50-4+20*8-15   ; Switch to GREY
+rasterline8 .equ 50-4+20*8-10   ; Switch to DGREY
+rasterline9 .equ 50-4+20*8      ; Switch to BLACK
 rasterline_last .equ 255      ; Handle sprites
 
 
@@ -53,6 +62,14 @@ color_ram       .equ $d800
 last_line       .equ vram+19*40
 scroll_line     .equ vram+22*40
 scroll_line_col .equ color_ram+22*40
+
+
+sprite_ofs_top  .equ 54
+sprite_ofs_left .equ 31
+
+logo_top        .equ 10*8-21    ; centered on 20 lines of maze
+logo_left       .equ 19*8-2*24    ; centered on 38 chars of maze
+
 
 SPRITE_0_DATA   .equ vram+$3f8
 SPRITE_1_DATA   .equ vram+$3f9
@@ -70,6 +87,7 @@ SPRITE_7_DATA   .equ vram+$3ff
 scrollx .byte 0
 scrolly .byte 0
 irqcnt  .byte 0
+screenstart .byte 0
 start:
         sei
 
@@ -98,6 +116,7 @@ start:
         jsr init_sprites
         jsr init_random
         jsr clear_screen
+        jsr draw_border
         jsr install_irq
 
         lda #COL_BLACK
@@ -106,38 +125,21 @@ start:
 
 loop:
 
-        lda #1      ; wait 1 interrupts ...
+        lda #1      ; wait 2 interrupts ...
         sta irqcnt
 _w      lda irqcnt
         bne _w
 
-        ;jsr songPlay
+;       
+;       lda #1      ; wait another 1 interrupts ...
+;       sta irqcnt
+;w2     lda irqcnt
+;;        bne _w2
 
-        lda #1      ; wait another 1 interrupts ...
-        sta irqcnt
-_w2     lda irqcnt
-        bne _w2
+        DEBUG_COL #COL_LBLUE
+        jsr songPlay
+        DEBUG_COL #COL_BLACK
 
-        ;jsr songPlay
-
-        ; soft scroll the "border" char
-        ldx fontdata+255*8+7
-
-        lda fontdata+255*8+6
-        sta fontdata+255*8+7
-        lda fontdata+255*8+5
-        sta fontdata+255*8+6
-        lda fontdata+255*8+4
-        sta fontdata+255*8+5
-        lda fontdata+255*8+3
-        sta fontdata+255*8+4
-        lda fontdata+255*8+2
-        sta fontdata+255*8+3
-        lda fontdata+255*8+1
-        sta fontdata+255*8+2
-        lda fontdata+255*8+0
-        sta fontdata+255*8+1
-        stx fontdata+255*8+0
 
         ; soft scroll the maze
         ldx scrolly
@@ -146,7 +148,7 @@ _w2     lda irqcnt
         stx scrolly
         jmp _end_scroll
 _hard_scroll:
-        DEBUG_COL #COL_LBLUE
+        DEBUG_COL #COL_YELLOW
         lda #7
         sta scrolly
         ;ora #%00010000
@@ -255,8 +257,6 @@ install_irq:
 
         and $d011       ; Clear highest bit of Rasterline
         sta $d011
-        lda #rasterline0
-        sta $d012       ; first color change on line 50
 
         lda  #%00000001
         sta  $d01a      ; Enable raster interrupt signals from VIC
@@ -273,10 +273,29 @@ install_irq:
         lda $d019   ; Clear any pending...
         sta $d019   ; ... VIC interrupt
 
+
+        ; Set up rasterhandlers ptr and first raster irq
+        SET16 ptr_rasterhandlers, rasterhandlers
+        lda #0
+        sta curhandlerpos
+        jsr set_next_rasterirq
+
         cli
 
         rts
 
+
+set_next_rasterirq:
+        ldy curhandlerpos
+        lda (ptr_rasterhandlers), y
+        sta $d012
+        iny
+        lda (ptr_rasterhandlers), y
+        sta _irqdispatch+1
+        iny
+        lda (ptr_rasterhandlers), y
+        sta _irqdispatch+2
+        rts
 
 irq:
         lda $d019
@@ -284,77 +303,73 @@ irq:
 
         ; dispatcher if-elses is way too slow. better use self-modifying code.
 _irqdispatch
-        jmp _rasterline0
+        jsr $ffff
 
-_rasterline0
+        ; set up next handler
+        lda curhandlerpos
+        clc
+        adc #3
+        cmp #maxhandlerpos
+        bne _cont
+        lda #0
+_cont   sta curhandlerpos
+        jsr set_next_rasterirq
+irq_chain:
+        jmp $ffff   ; jump to original interrupt handler. Will be patched at runtime
+
+
+rasterline_vscroll
+        DEBUG_COL #2
+
+        lda #1
+        sta screenstart
         lda #7
         sta $d016
 
         lda #%00010000
         ora scrolly
         sta $d011
-        lda #rasterline1
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline1
-        jmp _endirq
 
-_rasterline1
+        rts
+
+rasterline_dgrey
+        DEBUG_COL #1
         lda #COL_DGREY
         sta $d021       ; Set up new color
-        lda #rasterline2
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline2
-        jmp _endirq
+        rts
 
-_rasterline2
+rasterline_grey
+        DEBUG_COL #2
         lda #COL_GREY
         sta $d021       ; Set up new color
-        lda #rasterline3
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline3
-        jmp _endirq
+        rts
 
-_rasterline3
+rasterline_lgrey
+        DEBUG_COL #3
         lda #COL_LGREY
         sta $d021       ; Set up new color
-        lda #rasterline4
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline4
-        jmp _endirq
+        rts
 
-_rasterline4
+rasterline_white
+        DEBUG_COL #4
         lda #COL_WHITE
         sta $d021       ; Set up new color
-        lda #rasterline5
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline5
-        jmp _endirq
+        rts
 
-_rasterline5
-        lda #COL_LGREY
-        sta $d021       ; Set up new color
-        lda #rasterline6
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline6
-        jmp _endirq
+rasterline_signalirq
+        DEBUG_COL #COL_CYAN
+        lda screenstart
+        beq _done
+        DEBUG_COL #5
+        dec irqcnt
+        lda #0
+        sta screenstart
+_done
+        rts
 
-_rasterline6
-        lda #COL_GREY
-        sta $d021       ; Set up new color
-        lda #rasterline7
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline7
-        jmp _endirq
 
-_rasterline7
-        lda #COL_DGREY
-        sta $d021       ; Set up new color
-        lda #rasterline8
-        sta $d012
-        SET16 _irqdispatch+1, _rasterline8
-        jmp _endirq
-
-_rasterline8
+rasterline_black
+        DEBUG_COL #9
         lda #COL_BLACK
         sta $d021       ; Set up new color
 
@@ -366,31 +381,38 @@ _rasterline8
         sta $d016
         jsr scroll_colors
 
-        lda #rasterline_last
-        sta $d012
-        dec irqcnt
-        SET16 _irqdispatch+1, _rasterline_last
-        jmp _endirq
+        rts
 
-_rasterline_last
-        DEBUG_COL #3
-        jsr songPlay
-        DEBUG_COL #4
+rasterline_sprites
+        DEBUG_COL #10
+        ; soft scroll the "border" char
+        ldx fontdata+255*8+7
+        ldy fontdata+255*8+6
+        lda fontdata+255*8+5
+        sta fontdata+255*8+7
+        lda fontdata+255*8+4
+        sta fontdata+255*8+6
+        lda fontdata+255*8+3
+        sta fontdata+255*8+5
+        lda fontdata+255*8+2
+        sta fontdata+255*8+4
+        lda fontdata+255*8+1
+        sta fontdata+255*8+3
+        lda fontdata+255*8+0
+        sta fontdata+255*8+2
+        stx fontdata+255*8+1
+        sty fontdata+255*8+0
+
         jsr move_sprites
         DEBUG_COL #0
 
-        lda #rasterline0
-        sta $d012
-        dec irqcnt
-        SET16 _irqdispatch+1, _rasterline0
-_endirq
-irq_chain:
-        jmp $ffff   ; jump to original interrupt handler. Will be patched at runtime
+        rts
 
 
 init_sprites:
         lda #$ff
         sta SPRITES_VISIBLE ; All sprites visible
+        lda #0
         sta SPRITES_DBL_W   ; All sprites double width
         sta SPRITES_DBL_H   ; All sprites double height
 
@@ -410,6 +432,7 @@ init_sprites:
         sta SPRITE_3_DATA
 
         lda #sprite_box/64
+        lda #sprite_filled/64
         sta SPRITE_0_DATA
         sta SPRITE_1_DATA
         sta SPRITE_2_DATA
@@ -454,7 +477,7 @@ sprite_6_pos_y  .byte 64+6*20
 sprite_7_pos_x  .byte  0+7*20
 sprite_7_pos_y  .byte 64+7*20
 
-sprite_inc_x  .byte 255
+sprite_inc_x  .byte 254
 sprite_inc_y  .byte 255
 
 MOVESPR   .macro xreg, yreg, posx, posy, incx, incy
@@ -475,18 +498,38 @@ MOVESPR   .macro xreg, yreg, posx, posy, incx, incy
         sta posy
         .endm
 
+MOVESPR2  .macro xreg, yreg, posx, posy
+        lda #posx
+        sta xreg
+        lda #posy
+        sta yreg
+        .endm
+
+; Lissajous
+;move_sprites:
+;        SET16 ptr1, sintab
+;
+;        MOVESPR SPRITE_0_X, SPRITE_0_Y, sprite_0_pos_x, sprite_0_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_1_X, SPRITE_1_Y, sprite_1_pos_x, sprite_1_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_2_X, SPRITE_2_Y, sprite_2_pos_x, sprite_2_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_3_X, SPRITE_3_Y, sprite_3_pos_x, sprite_3_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_4_X, SPRITE_4_Y, sprite_4_pos_x, sprite_4_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_5_X, SPRITE_5_Y, sprite_5_pos_x, sprite_5_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_6_X, SPRITE_6_Y, sprite_6_pos_x, sprite_6_pos_y, sprite_inc_x, sprite_inc_y
+;        MOVESPR SPRITE_7_X, SPRITE_7_Y, sprite_7_pos_x, sprite_7_pos_y, sprite_inc_x, sprite_inc_y
+;        rts
 
 move_sprites:
-        SET16 ptr1, sintab
+        ; Top left coords:  31, 54
+        MOVESPR2 SPRITE_0_X, SPRITE_0_Y, sprite_ofs_left + logo_left + 0*24, sprite_ofs_top+logo_top+0*21
+        MOVESPR2 SPRITE_1_X, SPRITE_1_Y, sprite_ofs_left + logo_left + 1*24, sprite_ofs_top+logo_top+0*21
+        MOVESPR2 SPRITE_2_X, SPRITE_2_Y, sprite_ofs_left + logo_left + 2*24, sprite_ofs_top+logo_top+0*21
+        MOVESPR2 SPRITE_3_X, SPRITE_3_Y, sprite_ofs_left + logo_left + 3*24, sprite_ofs_top+logo_top+0*21
 
-        MOVESPR SPRITE_0_X, SPRITE_0_Y, sprite_0_pos_x, sprite_0_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_1_X, SPRITE_1_Y, sprite_1_pos_x, sprite_1_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_2_X, SPRITE_2_Y, sprite_2_pos_x, sprite_2_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_3_X, SPRITE_3_Y, sprite_3_pos_x, sprite_3_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_4_X, SPRITE_4_Y, sprite_4_pos_x, sprite_4_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_5_X, SPRITE_5_Y, sprite_5_pos_x, sprite_5_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_6_X, SPRITE_6_Y, sprite_6_pos_x, sprite_6_pos_y, sprite_inc_x, sprite_inc_y
-        MOVESPR SPRITE_7_X, SPRITE_7_Y, sprite_7_pos_x, sprite_7_pos_y, sprite_inc_x, sprite_inc_y
+        MOVESPR2 SPRITE_4_X, SPRITE_4_Y, sprite_ofs_left + logo_left + 0*24, sprite_ofs_top+logo_top+1*21
+        MOVESPR2 SPRITE_5_X, SPRITE_5_Y, sprite_ofs_left + logo_left + 1*24, sprite_ofs_top+logo_top+1*21
+        MOVESPR2 SPRITE_6_X, SPRITE_6_Y, sprite_ofs_left + logo_left + 2*24, sprite_ofs_top+logo_top+1*21
+        MOVESPR2 SPRITE_7_X, SPRITE_7_Y, sprite_ofs_left + logo_left + 3*24, sprite_ofs_top+logo_top+1*21
 
 
         rts
@@ -543,6 +586,52 @@ _l2:
         dex
         bne _lx
         clc
+        rts
+
+draw_border
+        lda #$ff
+        sta vram+00*40
+        sta vram+01*40
+        sta vram+02*40
+        sta vram+03*40
+        sta vram+04*40
+        sta vram+05*40
+        sta vram+06*40
+        sta vram+07*40
+        sta vram+08*40
+        sta vram+09*40
+        sta vram+10*40
+        sta vram+11*40
+        sta vram+12*40
+        sta vram+13*40
+        sta vram+14*40
+        sta vram+15*40
+        sta vram+16*40
+        sta vram+17*40
+        sta vram+18*40
+        sta vram+19*40
+
+        sta vram+00*40+37
+        sta vram+01*40+37
+        sta vram+02*40+37
+        sta vram+03*40+37
+        sta vram+04*40+37
+        sta vram+05*40+37
+        sta vram+06*40+37
+        sta vram+07*40+37
+        sta vram+08*40+37
+        sta vram+09*40+37
+        sta vram+10*40+37
+        sta vram+11*40+37
+        sta vram+12*40+37
+        sta vram+13*40+37
+        sta vram+14*40+37
+        sta vram+15*40+37
+        sta vram+16*40+37
+        sta vram+17*40+37
+        sta vram+18*40+37
+        sta vram+19*40+37
+
         rts
 
 generate_line:
@@ -603,7 +692,7 @@ copy_char   .macro adr
         .endm
 
 copy_line   .macro line
-        copy_char vram+line*40+0
+        ; char 0 is border, no need to copy        
         copy_char vram+line*40+1
         copy_char vram+line*40+2
         copy_char vram+line*40+3
@@ -640,9 +729,8 @@ copy_line   .macro line
         copy_char vram+line*40+34
         copy_char vram+line*40+35
         copy_char vram+line*40+36
-        copy_char vram+line*40+37
-        copy_char vram+line*40+38
-        copy_char vram+line*40+39
+        ; char 37 is border, no need to copy        
+        ; chars 38 and 39 are not needed because we're in 38-col-mode
         .endm
 
 scroll_up_fast:
@@ -690,6 +778,27 @@ random:
         rts
 rndval: .reserve 1
 
+RASTER_HANDLER  .macro line, handler
+        .byte line, <handler, >handler
+        .endm
+
+curhandlerpos
+        .byte 0
+rasterhandlers:
+        RASTER_HANDLER 30, rasterline_vscroll
+        RASTER_HANDLER 50, rasterline_dgrey
+        RASTER_HANDLER 60, rasterline_grey
+        RASTER_HANDLER 65, rasterline_lgrey
+        RASTER_HANDLER 70, rasterline_white
+
+        RASTER_HANDLER  75, rasterline_signalirq
+
+        RASTER_HANDLER 50-4+20*8-20, rasterline_lgrey
+        RASTER_HANDLER 50-4+20*8-15, rasterline_grey
+        RASTER_HANDLER 50-4+20*8-10, rasterline_dgrey
+        RASTER_HANDLER 50-4+20*8, rasterline_black
+        RASTER_HANDLER 255, rasterline_sprites
+maxhandlerpos   .equ *-rasterhandlers
 
 sintab:
         .byte 128,131,134,137,140,143,146,149,152,156,159,162,165,168,171,174
@@ -708,6 +817,70 @@ sintab:
         .byte   9, 10, 12, 13, 15, 16, 18, 19, 21, 23, 25, 27, 29, 31, 33, 35
         .byte  37, 39, 42, 44, 46, 49, 51, 54, 56, 59, 62, 64, 67, 70, 73, 76
         .byte  79, 81, 84, 87, 90, 93, 96, 99,103,106,109,112,115,118,121,124
+
+
+
+        .align 256 ; Ensure page boundary so that indexing is easy
+sprite_cols:
+        .byte COL_RED
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_RED
+sprite_cols_count       .equ *-sprite_cols
+        .byte COL_RED
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_WHITE
+        .byte COL_YELLOW
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_YELLOW
+        .byte COL_PINK
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_PINK
+        .byte COL_RED
+        .byte COL_RED
+
+
+
+
+
+
 
 
 
@@ -937,6 +1110,29 @@ sprite_box:
         .byte %10000000,%00000000,%00000001
         .byte %11111111,%11111111,%11111111
 
+        .align 64
+sprite_filled:
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
+        .byte %11111111,%11111111,%11111111
 
         .org $3800
 fontdata:
