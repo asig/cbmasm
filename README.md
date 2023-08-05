@@ -1,5 +1,7 @@
 # cbmasm
 
+*THIS IS WORK IN PROGRESS. DON'T EXPECT IT TO WORK OR EVEN COMPILE OUT OF THE BOX*
+
 `cbmasm` is an assembler targeted primarily to the Commodore 128 that allows the programmer to switch between
 8510 and Z80 assembly code in a single source file. 
 
@@ -8,6 +10,8 @@ or Z80 CPU. Besides that, `cbmasm` comes with all the features that you expect f
 macros, conditional assembly, and many more.
 
 It does not support illegal 6510 operations.
+
+
 
 ## Usage
 ```bash
@@ -49,5 +53,5 @@ go test ./...
 TODO describe directories
 
 ## License
-Copyright (c) 2020 Andreas Signer.  
+Copyright (c) 2020-2023 Andreas Signer.  
 Licensed under [GPLv3](https://www.gnu.org/licenses/gpl-3.0).
