@@ -14,7 +14,8 @@ Labels need to terminate with ":" unless they start at the beginning of the line
 
 ## Local labels
 A local label is a label that starts with an underscore (`_`).
-All local labels are only visible (and need to be resolved) before the next non-local label.
+All local labels are only visible (and need to be resolved) before the next non-local label, or before a `.clear_locals` 
+directive.
 
 Local labels in macros are not visible outside the macro. 
 

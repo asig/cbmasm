@@ -81,32 +81,34 @@ const (
 	Endm
 	Encoding
 	Output
+	ClearLocals
 
 	Eol
 )
 
 var identToTokenType = map[string]TokenType{
-	".cpu":      Cpu,
-	".platform": Platform,
-	".ifdef":    Ifdef,
-	".ifndef":   Ifndef,
-	".if":       If,
-	".else":     Else,
-	".endif":    Endif,
-	".fail":     Fail,
-	".include":  Include,
-	".incbin":   Incbin,
-	".reserve":  Reserve,
-	".byte":     Byte,
-	".word":     Word,
-	".float":    Float,
-	".equ":      Equ,
-	".org":      Org,
-	".align":    Align,
-	".macro":    Macro,
-	".endm":     Endm,
-	".encoding": Encoding,
-	".output":   Output,
+	".cpu":          Cpu,
+	".platform":     Platform,
+	".ifdef":        Ifdef,
+	".ifndef":       Ifndef,
+	".if":           If,
+	".else":         Else,
+	".endif":        Endif,
+	".fail":         Fail,
+	".include":      Include,
+	".incbin":       Incbin,
+	".reserve":      Reserve,
+	".byte":         Byte,
+	".word":         Word,
+	".float":        Float,
+	".equ":          Equ,
+	".org":          Org,
+	".align":        Align,
+	".macro":        Macro,
+	".endm":         Endm,
+	".encoding":     Encoding,
+	".output":       Output,
+	".clear_locals": ClearLocals,
 }
 
 var tokenTypeToString = map[TokenType]string{

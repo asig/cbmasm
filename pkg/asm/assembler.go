@@ -663,6 +663,10 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 			// must be a mnemonic
 			a.mnemonicHandler(a, t)
 		}
+	case scanner.ClearLocals:
+		a.nextToken()
+		a.reportUnresolvedSymbols(t.Pos, isLocalLabel)
+		a.clearLocalLabels(isLocalLabel)
 	default:
 		a.AddError(t.Pos, "Identifier or directive expected")
 	}

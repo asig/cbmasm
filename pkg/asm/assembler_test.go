@@ -182,6 +182,23 @@ _l1   brk
 		},
 
 		{
+			name: "clear_locals",
+			text: `   .org 0
+l1    jmp _l1
+     nop
+_l1   lda #0
+     nop
+     jmp _l1
+	 .clear_locals
+    nop
+     jmp _l1
+     nop
+_l1   brk
+`,
+			want: []byte{0x4c, 0x04, 0x00, 0xea, 0xa9, 0x00, 0xea, 0x4c, 0x04, 0x00, 0xea, 0x4c, 0x0f, 0x00, 0xea, 0x00},
+		},
+
+		{
 			name: "labels - unresolved",
 			text: `   .org 0
      jmp l
