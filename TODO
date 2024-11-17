@@ -41,3 +41,5 @@
 [ ] byte expressions are forced to a size too early (already during const eval, e.g. "LDA #($1FF-$100)" although it shouldn't )
 [ ] .equs used in macros, but defined afterwards, are not correctly resolved and result in "undef symbol"
 [ ] macro calls ignore garbage at the enf of the line, they should fail
+[ ] macro: label on .endm line is ignored.
+[ ] shift operations (<< and >>) should be supported!
