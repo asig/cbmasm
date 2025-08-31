@@ -59,7 +59,14 @@ func (section *Section) PC() int {
 	return section.org + len(section.bytes)
 }
 
-func (section *Section) applyPatch(p patch) {
+func (section *Section) Contains(pc int) bool {
+	if section == nil {
+		return false
+	}
+	return pc >= section.org && pc < section.org+len(section.bytes)
+}
+
+func (section *Section) ApplyPatch(p patch) {
 	// TODO(asigner): Add warning for JMP ($xxFF)
 	p.node.CheckRange(section.errorSink)
 	val := p.node.Eval()

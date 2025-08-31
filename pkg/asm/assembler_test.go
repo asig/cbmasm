@@ -125,6 +125,42 @@ l2: jmp l2 ; JMP $A000 `
 	}
 }
 
+func TestAssembler_PatchWithMultipleSections(t *testing.T) {
+
+	src := `   
+    .org $8000
+l1:
+    jmp l2
+
+    .skip 100
+
+l2:	jmp l1
+`
+
+	assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
+	assembler.Assemble(text.Process("", src))
+	errs := assembler.Errors()
+	if len(errs) > 0 {
+		t.Errorf("Got errors, expected none.")
+		t.Errorf("Errors: %v", errs)
+	}
+
+	bytes := assembler.GetBytes()
+	bytesWanted := []byte{
+		0x4c, 0x67, 0x80,
+		0x4c, 0x00, 0x80,
+	}
+
+	if len(bytes) != len(bytesWanted) {
+		t.Errorf("Got %d bytes, want %d", len(bytes), len(bytesWanted))
+	}
+	for i := 0; i < len(bytesWanted); i++ {
+		if bytes[i] != bytesWanted[i] {
+			t.Errorf("Byte %d is wrong: got %02x, want %02x", i, bytes[i], bytesWanted[i])
+		}
+	}
+}
+
 func TestAssembler_BadFloatConst(t *testing.T) {
 	tests := []struct {
 		name         string

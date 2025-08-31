@@ -1572,7 +1572,11 @@ func (a *Assembler) resolveDependencies(symbol string, val expr.Node) {
 	for _, p := range patches {
 		p.node.Resolve(symbol, val.Eval())
 		if p.node.IsResolved() {
-			a.section.applyPatch(p)
+			for _, s := range a.sections {
+				if s.Contains(p.pc) {
+					s.ApplyPatch(p)
+				}
+			}
 		} else {
 			adjustedPatches = append(adjustedPatches, p)
 		}
