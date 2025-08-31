@@ -71,7 +71,14 @@ TODO
 TODO
 
 ### `.org`
-TODO
+Usage: `.org <expr>`
+Sets the PC to <expr>, fills the memory between the current position and <exp> with zeroes 
+(unless it is the first `.org` directive in the file, and no instructions were emitted yet)
+
+### `.skip`
+Usage: `.skip <expr>`
+Skips <expr> bytes in the generated output. The PC is adjusted, but no bytes will be emitted.
+This is for example useful if you want to assemble C64 Ultimax cartridges.
 
 ### `.align`
 TODO
@@ -117,6 +124,7 @@ op := ".macro" [ident {"," ident }]
     | ".fail" string
     | ".equ" expr
     | ".org" expr
+    | ".skip" expr
     | ".align" expr
     | ".byte" dbOp {"," dbOp }
     | ".float" expr {"," expr }

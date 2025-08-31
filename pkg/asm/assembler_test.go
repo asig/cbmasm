@@ -86,6 +86,45 @@ l:
 	}
 }
 
+func TestAssembler_Skip(t *testing.T) {
+
+	src := `   
+	.org $8000
+l1: jmp l1	; JMP $8000
+	.org $9000
+	.skip $1000
+l2: jmp l2 ; JMP $A000 `
+
+	assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
+	assembler.Assemble(text.Process("", src))
+	errs := assembler.Errors()
+	if len(errs) > 0 {
+		t.Errorf("Got errors, expected none.")
+		t.Errorf("Errors: %v", errs)
+	}
+
+	bytes := assembler.GetBytes()
+	wantLen := 3 + 0x1000
+	if len(bytes) != wantLen {
+		t.Errorf("Got %d bytes, want %d", len(bytes), wantLen)
+	}
+	if bytes[0] != 0x4c || bytes[1] != 0x00 || bytes[2] != 0x80 {
+		t.Errorf("First instruction is wrong: got %02x %02x %02x, want 4c 00 80", bytes[0], bytes[1], bytes[2])
+	}
+	for i := 3; i < 0x1000; i++ {
+		if bytes[i] != 0 {
+			t.Errorf("Byte %d is wrong: got %02x, want 00", i, bytes[i])
+		}
+	}
+	b1 := bytes[0x1000]
+	b2 := bytes[0x1000+1]
+	b3 := bytes[0x1000+2]
+	t.Logf("Last instruction: %02x %02x %02x", b1, b2, b3)
+	if b1 != 0x4c || b2 != 0x00 || b3 != 0xa0 {
+		t.Errorf("Last instruction is wrong: got %02x %02x %02x, want %02x %02x %02x", b1, b2, b3, 0x4c, 0x00, 0xa0)
+	}
+}
+
 func TestAssembler_BadFloatConst(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -151,7 +151,8 @@ type Assembler struct {
 	macro *macro
 
 	// Code generation buffer
-	section *Section
+	sections []*Section
+	section  *Section
 
 	// outstanding patches
 	patchesPerLabel map[string][]patch
@@ -180,16 +181,23 @@ func New(includePaths []string, defaultCPU string, defaultPlatform string, defau
 	return a
 }
 
+func (a *Assembler) beginSection(org int) {
+	a.section = NewSection(org, a)
+	a.sections = append(a.sections, a.section)
+}
+
 func (a *Assembler) Assemble(t text.Text) {
 	a.errors = nil
 	a.warnings = nil
-	a.section = nil
 	a.patchesPerLabel = make(map[string][]patch)
 	a.assemblyEnabled = stack{}
 	a.assemblyEnabled.push(true)
 	a.ListingLines = nil
 	a.canSetPlatform = true
 	a.symbols = newSymbolTable()
+
+	a.beginSection(0)
+	a.section.ignore = true
 
 	a.setCPU(a.defaultCPU)
 	a.setPlatform(a.defaultPlatform)
@@ -275,7 +283,14 @@ func (a *Assembler) Origin() int {
 }
 
 func (a *Assembler) GetBytes() []byte {
-	return a.section.bytes
+	var bytes []byte
+	for _, s := range a.sections {
+		if !s.ignore {
+			bytes = append(bytes, s.bytes...)
+		}
+	}
+
+	return bytes
 }
 
 func (a *Assembler) maybeLabel() (scanner.Token, text.Pos, string) {
@@ -530,20 +545,35 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		}
 		node = a.checkType(node, expr.NodeType_Int)
 		org = node.Eval()
-		if a.section != nil {
-			max := a.section.PC()
-			if org < max {
-				a.AddError(t.Pos, "New origin %d is lower than current pc %d", org, max)
-				org = max
-			}
-			toAdd := org - max
-			for toAdd > 0 {
-				a.section.Emit(0)
-				toAdd = toAdd - 1
-			}
-		} else {
-			a.section = NewSection(org, a)
+		max := a.section.PC()
+		if org < max {
+			a.AddError(t.Pos, "New origin %d is lower than current pc %d", org, max)
+			org = max
 		}
+
+		if a.section.ignore {
+			// Just create a new section
+			a.beginSection(org)
+		} else {
+			// Add padding bytes to the current section
+			toAdd := org - max
+			for range toAdd {
+				a.section.Emit(0)
+			}
+		}
+	case scanner.Skip:
+		a.nextToken()
+		// get bytes to skip
+		node := a.expr(2, false)
+		skip := 0
+		if !node.IsResolved() {
+			a.AddError(t.Pos, "Can't use forward declarations in .skip")
+			return
+		}
+		node = a.checkType(node, expr.NodeType_Int)
+		skip = node.Eval()
+		newOrg := a.section.PC() + skip
+		a.beginSection(newOrg)
 	case scanner.Align:
 		a.nextToken()
 		node := a.expr(2, false)
@@ -1383,11 +1413,6 @@ func (a *Assembler) checkType(n expr.Node, t expr.NodeType) expr.Node {
 }
 
 func (a *Assembler) emitNode(n expr.Node) {
-	if a.section == nil {
-		a.AddError(a.scanner.LineStart(), "No .org specified")
-		a.section = NewSection(0, a)
-	}
-
 	switch n.Type() {
 	case expr.NodeType_String:
 		str := n.EvalStr()

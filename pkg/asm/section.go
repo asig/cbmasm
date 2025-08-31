@@ -23,17 +23,19 @@ import (
 )
 
 type Section struct {
+	ignore    bool
 	errorSink errors.Sink
 	org       int
 	bytes     []byte
 }
 
 func NewSection(org int, errorSink errors.Sink) *Section {
-	return &Section{errorSink: errorSink, org: org}
+	return &Section{errorSink: errorSink, org: org, ignore: false}
 }
 
 func (section *Section) Emit(b byte) {
 	section.bytes = append(section.bytes, b)
+	section.ignore = false
 }
 
 func (section *Section) Org() int {

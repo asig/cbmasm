@@ -76,6 +76,7 @@ const (
 	Float
 	Equ
 	Org
+	Skip
 	Align
 	Macro
 	Endm
@@ -103,6 +104,7 @@ var identToTokenType = map[string]TokenType{
 	".float":        Float,
 	".equ":          Equ,
 	".org":          Org,
+	".skip":         Skip,
 	".align":        Align,
 	".macro":        Macro,
 	".endm":         Endm,
@@ -155,6 +157,7 @@ var tokenTypeToString = map[TokenType]string{
 	Word:      ".word",
 	Equ:       ".equ",
 	Org:       ".org",
+	Skip:      ".skip",
 	Align:     ".align",
 	Macro:     ".macro",
 	Endm:      ".endm",
