@@ -250,7 +250,7 @@ func main() {
 		}
 	}
 	if len(errs) != 0 {
-		return
+		os.Exit(1)
 	}
 
 	output := assembler.CurrentOutput()
