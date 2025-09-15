@@ -672,6 +672,11 @@ L NOP
 			want: []byte{0x95, 0x78},
 		},
 		{
+			name: "Single instruction STA $0078,Y",
+			text: "STA $0078,Y",
+			want: []byte{0x99, 0x78, 0x00},
+		},
+		{
 			name: "Single instruction STA $1234",
 			text: "STA $1234",
 			want: []byte{0x8D, 0x34, 0x12},

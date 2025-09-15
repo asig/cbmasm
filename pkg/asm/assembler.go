@@ -949,6 +949,22 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 				a.AddError(t.Pos, "parameter too big for 1 byte")
 			}
 		}
+	} else if !found && param.mode == mos6502.AM_ZeroPageIndexedX {
+		// Maybe it's AM_AbsoluteIndexedX?
+		opCode, found = opCodes[mos6502.AM_AbsoluteIndexedX]
+		if found {
+			// Yes, it is!
+			param.mode = mos6502.AM_AbsoluteIndexedX
+			param.val.ForceSize(2)
+		}
+	} else if !found && param.mode == mos6502.AM_ZeroPageIndexedY {
+		// Maybe it's AM_AbsoluteIndexedY?
+		opCode, found = opCodes[mos6502.AM_AbsoluteIndexedY]
+		if found {
+			// Yes, it is!
+			param.mode = mos6502.AM_AbsoluteIndexedY
+			param.val.ForceSize(2)
+		}
 	}
 	if !found {
 		a.AddError(t.Pos, "Invalid parameter.")
