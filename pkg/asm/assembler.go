@@ -447,38 +447,18 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		filename := a.lookahead.StrVal
 		a.match(scanner.String)
 		skipNode := expr.NewConst(p, 0, 2)
+		var lenNode expr.Node = nil
 		if a.lookahead.Type == scanner.Comma {
 			a.nextToken()
 			skipNode = a.expr(2, false)
-			if !skipNode.IsResolved() {
-				a.AddError(skipNode.Pos(), "Expression is not resolved")
-				skipNode = expr.NewConst(skipNode.Pos(), 0, 2)
-			}
 			skipNode = a.checkType(skipNode, expr.NodeType_Int)
-		}
-		skip := skipNode.Eval()
-		if skip < 0 {
-			a.AddError(skipNode.Pos(), "Bytes to skip must be >= 0.")
-			skip = 0
-		}
-		f := a.findIncludeFile(filename)
-		if f == nil {
-			a.AddError(p, "Can't find file %q in include paths.", filename)
-			break
-		}
-		data, err := ioutil.ReadFile(*f)
-		if err != nil {
-			a.AddError(p, "Can't read file %q: %s", *f, err)
-		} else {
-			if skip > len(data) {
-				a.AddError(skipNode.Pos(), "Skipping %d bytes, but file only contains %d.", skip, len(data))
-				skip = len(data)
+			if a.lookahead.Type == scanner.Comma {
+				a.nextToken()
+				lenNode = a.expr(2, false)
+				lenNode = a.checkType(lenNode, expr.NodeType_Int)
 			}
 		}
-		data = data[skip:]
-		for _, b := range data {
-			a.emit(expr.NewConst(p, int(b), 1))
-		}
+		a.handleIncbin(filename, p, skipNode, lenNode)
 	case scanner.Byte:
 		a.nextToken()
 		// handle byte consts
@@ -701,6 +681,69 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.AddError(t.Pos, "Identifier or directive expected")
 	}
 	return addToListing
+}
+
+func (a *Assembler) handleIncbin(filename string, filenamePos text.Pos, skip, length expr.Node) {
+	skipVal := 0
+	lengthVal := 0
+
+	if skip != nil {
+		if !skip.IsResolved() {
+			a.AddError(skip.Pos(), "Expression is not resolved")
+			return
+		}
+		if skip.Type() != expr.NodeType_Int {
+			a.AddError(skip.Pos(), "Expression must be of type integer")
+			return
+		}
+		skipVal = skip.Eval()
+		if skipVal < 0 {
+			a.AddError(skip.Pos(), "Bytes to skip must be >= 0.")
+			return
+		}
+	}
+	if length != nil {
+		if !length.IsResolved() {
+			a.AddError(length.Pos(), "Expression is not resolved")
+			return
+		}
+		if length.Type() != expr.NodeType_Int {
+			a.AddError(length.Pos(), "Expression must be of type integer")
+			return
+		}
+		lengthVal = length.Eval()
+		if lengthVal < 0 {
+			a.AddError(length.Pos(), "Bytes to load must be >= 0.")
+			return
+		}
+	}
+
+	f := a.findIncludeFile(filename)
+	if f == nil {
+		a.AddError(filenamePos, "Can't find file %q in include paths.", filename)
+		return
+	}
+	data, err := os.ReadFile(*f)
+	if err != nil {
+		a.AddError(filenamePos, "Can't read file %q: %s", *f, err)
+		return
+	}
+
+	if skipVal > len(data) {
+		a.AddError(skip.Pos(), "Skipping %d bytes, but file only contains %d.", skipVal, len(data))
+		return
+	}
+	data = data[skipVal:]
+	if lengthVal > 0 {
+		if lengthVal > len(data) {
+			a.AddError(length.Pos(), "Loading %d bytes, but only %d bytes available.", lengthVal, len(data))
+			return
+		}
+		data = data[:lengthVal]
+	}
+	for _, b := range data {
+		a.emit(expr.NewConst(filenamePos, int(b), 1))
+	}
 }
 
 func (a *Assembler) updatePredefinedSymbol(name, value string) {

@@ -21,6 +21,8 @@ package asm
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -158,6 +160,118 @@ l2:	jmp l1
 		if bytes[i] != bytesWanted[i] {
 			t.Errorf("Byte %d is wrong: got %02x, want %02x", i, bytes[i], bytesWanted[i])
 		}
+	}
+}
+
+func TestAssembler_Incbin(t *testing.T) {
+
+	tests := []struct {
+		desc       string
+		source     string
+		wantBytes  []byte
+		wantErrors []errors.Error
+	}{
+		{
+			desc: "basic incbin",
+			source: `
+	.org $8000
+	.incbin "incbin.bin"
+	`,
+			wantBytes:  []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			wantErrors: []errors.Error{},
+		},
+		{
+			desc: "incbin with skip",
+			source: `
+	.org $8000
+	.incbin "incbin.bin", 1
+	`,
+			wantBytes:  []byte{2, 3, 4, 5, 6, 7, 8, 9, 10},
+			wantErrors: []errors.Error{},
+		},
+		{
+			desc: "incbin with skip and length",
+			source: `
+	.org $8000
+	.incbin "incbin.bin", 1, 3
+	`,
+			wantBytes:  []byte{2, 3, 4},
+			wantErrors: []errors.Error{},
+		},
+		{
+			desc: "incbin with length only",
+			source: `
+	.org $8000
+	.incbin "incbin.bin", 0, 5
+	`,
+			wantBytes:  []byte{1, 2, 3, 4, 5},
+			wantErrors: []errors.Error{},
+		},
+		{
+			desc: "incbin with too large skip",
+			source: `
+    .org $8000
+    .incbin "incbin.bin", 20
+	`,
+			wantBytes:  []byte{},
+			wantErrors: []errors.Error{{text.Pos{Filename: "", Line: 3, Col: 27}, "Skipping 20 bytes, but file only contains 10."}},
+		},
+		{
+			desc: "incbin with too large length",
+			source: `
+	.org $8000
+	.incbin "incbin.bin", 5, 10
+	`,
+			wantBytes:  []byte{},
+			wantErrors: []errors.Error{{text.Pos{Filename: "", Line: 3, Col: 27}, "Loading 10 bytes, but only 5 bytes available."}},
+		},
+		{
+			desc: "incbin with non-existing file",
+			source: `
+	.org $8000
+	.incbin "doesnotexist.bin"
+	`,
+			wantBytes:  []byte{},
+			wantErrors: []errors.Error{{text.Pos{Filename: "", Line: 3, Col: 10}, "Can't find file \"doesnotexist.bin\" in include paths."}},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			// Create a temporary directory to hold the incbin file
+			tmpDir, err := os.MkdirTemp("", "incbin_test")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tmpDir)
+
+			incbinPath := tmpDir + "/incbin.bin"
+			err = os.WriteFile(incbinPath, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, 0644)
+			if err != nil {
+				t.Fatalf("Failed to write incbin.bin: %v", err)
+			}
+
+			assembler := New([]string{tmpDir}, "6502", "c128", "plain", "petscii", []string{})
+			assembler.Assemble(text.Process("", test.source))
+			errs := assembler.Errors()
+			if len(errs) != len(test.wantErrors) {
+				t.Errorf("Got %d, want %d errs", len(errs), len(test.wantErrors))
+				t.Errorf("Errors: %v", errs)
+			}
+			for i := range errs {
+				got := errs[i]
+				want := test.wantErrors[i]
+				if got != want {
+					t.Errorf("Error %d: got %+v, want %+v", i+1, got, want)
+				}
+			}
+			if len(test.wantErrors) == 0 {
+				bytes := assembler.GetBytes()
+				if !reflect.DeepEqual(bytes, test.wantBytes) {
+					t.Errorf("Got %v, want %v", bytes, test.wantBytes)
+				}
+			}
+		})
 	}
 }
 
