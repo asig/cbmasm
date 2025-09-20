@@ -1399,7 +1399,10 @@ func (a *Assembler) factor(size int, stringsAllowed bool) expr.Node {
 			return n
 		}
 		if s, found := a.symbols.get(sym); found {
-			if s.val.IsResolved() {
+			if s.kind == symbolMacro {
+				a.AddError(p, "%q is a macro, not a constant or label", sym)
+				node = expr.NewConst(p, 0, size)
+			} else if s.val.IsResolved() {
 				switch s.val.Type() {
 				case expr.NodeType_Int:
 					node = expr.NewConst(p, s.val.Eval(), size)
