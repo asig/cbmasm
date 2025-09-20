@@ -572,7 +572,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		a.nextToken()
 		// label is equ name!
 		pos := t.Pos
-		val := a.expr(2, true)
+		val := a.expr(2, false)
 		err := a.addSymbol(label, symbolConst, val)
 		if err != nil {
 			a.AddError(pos, err.Error())
