@@ -391,7 +391,7 @@ func (a *Assembler) processLine() (addToListing bool) {
 		case stateAssemble:
 			addToListing = a.assembleLine(t, labelPos, label)
 		case stateRecordMacro:
-			a.recordMacro()
+			a.recordMacro(t, labelPos, label)
 		}
 	}
 	if len(a.Errors()) <= errs {
@@ -658,7 +658,7 @@ func (a *Assembler) assembleLine(t scanner.Token, labelPos text.Pos, label strin
 		}
 		a.state = stateRecordMacro
 	case scanner.Endm:
-		a.AddError(t.Pos, ".mend without .macro")
+		a.AddError(t.Pos, ".endm without .macro")
 	case scanner.Ident:
 		op := t.StrVal
 		a.nextToken()
@@ -1020,9 +1020,7 @@ func handle6502Mnemonic(a *Assembler, t scanner.Token) {
 	}
 }
 
-func (a *Assembler) recordMacro() {
-	t, labelPos, label := a.maybeLabel()
-
+func (a *Assembler) recordMacro(t scanner.Token, labelPos text.Pos, label string) {
 	switch t.Type {
 	case scanner.Macro:
 		a.AddError(t.Pos, "Nested macros are not allowed")

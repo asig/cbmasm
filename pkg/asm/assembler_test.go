@@ -322,6 +322,26 @@ func TestAssembler_BadFloatConst(t *testing.T) {
 	}
 }
 
+func TestAssembler_LabelOnEndmLine(t *testing.T) {
+
+	src := `   .org 0
+m1	.macro
+	lda #0
+_l	.endm
+`
+
+	assembler := New([]string{}, "6502", "c128", "plain", "petscii", []string{})
+	assembler.Assemble(text.Process("", src))
+	errs := assembler.Errors()
+	if len(errs) != 1 {
+		t.Fatalf("Got %d, want 1 err", len(errs))
+	}
+	wantErr := errors.Error{text.Pos{Filename: "", Line: 4, Col: 1}, "Labels not allowed for .endm"}
+	if errs[0] != wantErr {
+		t.Errorf("Got %+v, want %+v", errs[0], wantErr)
+	}
+}
+
 func TestAssembler_assemble(t *testing.T) {
 	tests := []struct {
 		name         string
